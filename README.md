@@ -8,6 +8,8 @@ Das Projekt befindet sich in der Anforderungs- und Planungsphase. Es ist noch ke
 
 Die fachlichen und technischen Entscheidungen befinden sich im Ordner [Documentation](Documentation/README.md).
 
+Die verbindliche Zusammenarbeit über Tickets, Branches und Commits ist in [Documentation/Development-Workflow.md](Documentation/Development-Workflow.md) beschrieben.
+
 ## Geplante Bereiche
 
 - `client/` – eigenständige mobile PWA
@@ -16,4 +18,3 @@ Die fachlichen und technischen Entscheidungen befinden sich im Ordner [Documenta
 - `infrastructure/` – Docker- und Bereitstellungskonfiguration
 
 Client und Server werden getrennt gebaut und in getrennten Dockercontainern ausgeführt.
-
