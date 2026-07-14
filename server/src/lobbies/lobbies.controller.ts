@@ -2,35 +2,49 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/comm
 import { AuthenticatedRequest, SessionGuard } from "../auth/session.guard.js";
 import { CreateLobbyDto } from "./lobby.dto.js";
 import { LobbiesService } from "./lobbies.service.js";
+import { RealtimeGateway } from "../realtime/realtime.gateway.js";
 
 @Controller("lobbies")
 @UseGuards(SessionGuard)
 export class LobbiesController {
-  constructor(private readonly lobbies: LobbiesService) {}
+  constructor(
+    private readonly lobbies: LobbiesService,
+    private readonly realtime: RealtimeGateway
+  ) {}
 
   @Post()
-  create(@Req() request: AuthenticatedRequest, @Body() input: CreateLobbyDto) {
-    return this.lobbies.create(request.user.id, input);
+  async create(@Req() request: AuthenticatedRequest, @Body() input: CreateLobbyDto) {
+    const lobby = await this.lobbies.create(request.user.id, input);
+    await this.realtime.publishLobby(lobby.code);
+    return lobby;
   }
 
   @Post(":code/join")
-  join(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
-    return this.lobbies.join(request.user.id, code);
+  async join(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
+    const lobby = await this.lobbies.join(request.user.id, code);
+    await this.realtime.publishLobby(lobby.code);
+    return lobby;
   }
 
   @Post(":code/ready")
-  ready(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
-    return this.lobbies.setReady(request.user.id, code, true);
+  async ready(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
+    const lobby = await this.lobbies.setReady(request.user.id, code, true);
+    await this.realtime.publishLobby(lobby.code);
+    return lobby;
   }
 
   @Post(":code/not-ready")
-  notReady(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
-    return this.lobbies.setReady(request.user.id, code, false);
+  async notReady(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
+    const lobby = await this.lobbies.setReady(request.user.id, code, false);
+    await this.realtime.publishLobby(lobby.code);
+    return lobby;
   }
 
   @Post(":code/start")
-  start(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
-    return this.lobbies.start(request.user.id, code);
+  async start(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
+    const lobby = await this.lobbies.start(request.user.id, code);
+    await this.realtime.publishLobby(lobby.code);
+    return lobby;
   }
 
   @Get(":code")

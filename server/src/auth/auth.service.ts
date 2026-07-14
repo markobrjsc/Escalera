@@ -53,6 +53,16 @@ export class AuthService {
     if (token) await this.prisma.session.deleteMany({ where: { tokenHash: hashSessionToken(token) } });
   }
 
+  async getSessionUser(token: string | undefined) {
+    if (!token) return null;
+    const session = await this.prisma.session.findUnique({
+      where: { tokenHash: hashSessionToken(token) },
+      include: { user: true }
+    });
+    if (!session || session.expiresAt <= new Date()) return null;
+    return this.publicUser(session.user);
+  }
+
   publicUser(user: { id: string; username: string; avatarKey?: string | null; tutorialCompleted?: boolean }) {
     return {
       id: user.id,
