@@ -24,6 +24,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-escalera}:${POSTGRES_PASSWORD:-change-me-for-local-development}@postgres:5432/${POSTGRES_DB:-escalera}
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://object-storage:9000
+      S3_BUCKET: ${S3_BUCKET:-escalera-profiles}
     ports:
       - "3000:3000"
     depends_on:
