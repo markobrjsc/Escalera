@@ -8,14 +8,14 @@ Dieser Workflow bestimmt die Zusammenarbeit für jede zukünftige Änderung am E
 
 Ab sofort bearbeiten wir standardmäßig nur noch GitHub-Tickets. Nur wenn ausdrücklich gesagt wird, dass eine Anfrage kein Ticket sein soll, weichen wir davon ab.
 
-Die Zusammenarbeit findet immer im bestehenden Codex-Task statt. Es ist kein neuer Prompt oder neuer Task erforderlich.
+Die Zusammenarbeit findet immer im bestehenden Codex-Task statt. Ein einzelner Task darf mehrere Tickets nacheinander bearbeiten. Es ist kein neuer Prompt oder neuer Task erforderlich.
 
 ## Ablauf eines Tickets
 
 | Schritt | Verantwortlich | Ergebnis |
 |---:|---|---|
 | 1 | Codex | Konkretes Ticket wird vorgeschlagen oder angelegt. |
-| 2 | Nutzer | Startet die Arbeit mit `START #<Nummer>`. |
+| 2 | Nutzer | Gibt die Arbeit in natürlicher Sprache frei, zum Beispiel „Bearbeite #12“. |
 | 3 | Codex | Erstellt einen Arbeitsbranch von `main`. |
 | 4 | Beide | Klären Fragen und prüfen Zwischenergebnisse bis zur Zufriedenheit. |
 | 5 | Codex | Prüft Änderungen und relevante Tests. |
@@ -23,6 +23,8 @@ Die Zusammenarbeit findet immer im bestehenden Codex-Task statt. Es ist kein neu
 | 7 | Codex | Erstellt den Commit, pusht ihn und öffnet einen Pull Request. |
 | 8 | Nutzer | Gibt den Merge ausdrücklich frei. |
 | 9 | Codex | Mergt, löscht den Branch und schlägt nächste Tickets vor. |
+
+`START #<Nummer>` ist weiterhin als Kurzform möglich, aber nicht verpflichtend.
 
 ## Branches
 
@@ -38,7 +40,7 @@ Beispiel:
 ticket/12-realtime-lobby-erstellen
 ```
 
-Mehrere inhaltlich eng zusammenhängende Tickets dürfen auf demselben Branch liegen. Der Branchname bezieht sich dann auf das erste oder übergeordnete Ticket.
+Mehrere inhaltlich eng zusammenhängende Tickets dürfen auf Wunsch auf demselben Branch liegen. Der Branchname bezieht sich dann auf das erste oder übergeordnete Ticket. Innerhalb eines einzelnen Codex-Tasks können Tickets sowohl auf getrennten als auch auf demselben Branch bearbeitet werden.
 
 ## Commits
 
@@ -61,13 +63,15 @@ docs: Spielregeln für Kartenkauf ergänzen (#12)
 
 ## Freigabepunkte
 
-Es gibt zwei bewusst getrennte Freigaben:
+Es gibt zwei bewusst getrennte Freigabepunkte:
 
-1. **Arbeitsfreigabe:** `START #<Nummer>` erlaubt die Arbeit auf dem Ticket-Branch.
+1. **Arbeitsfreigabe:** Eine eindeutige natürliche Freigabe erlaubt die Arbeit auf dem Ticket-Branch.
 2. **Abschlussfreigabe:** erlaubt Commit, Push und Pull Request.
 3. **Mergefreigabe:** erlaubt Merge nach `main` und das Löschen des Branches.
 
-Dadurch bleibt der Nutzer vor jedem dauerhaften Schritt entscheidungsfähig.
+Die Freigabepunkte dürfen in einer einzigen Nachricht gebündelt werden. Wenn der Nutzer eindeutig Commit, Push, Merge und Branch-Löschung erlaubt, führt Codex diese Schritte ohne eine zusätzliche Nachricht aus.
+
+Rückfragen stellt Codex kurz direkt im bestehenden Task. Ein spezielles Eingabefenster ist nicht erforderlich; jede natürliche Antwort des Nutzers kann eine Entscheidung oder Freigabe enthalten.
 
 ## Definition of Done
 
@@ -83,4 +87,4 @@ Ein Ticket gilt erst als fertig, wenn:
 
 ## Nächste Arbeit
 
-Nach jedem abgeschlossenen Ticket schlägt Codex zwei bis vier sinnvolle Folge-Tickets vor und wartet auf eine neue Eingabe wie `START #<Nummer>`.
+Nach jedem abgeschlossenen Ticket schlägt Codex zwei bis vier sinnvolle Folge-Tickets vor und wartet auf eine natürliche Arbeitsfreigabe. Es wird nicht automatisch ein weiteres Ticket begonnen.

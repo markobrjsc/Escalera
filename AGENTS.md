@@ -6,23 +6,28 @@ Diese Regeln gelten für alle Arbeiten im Repository Escalera.
 
 - Standardmäßig wird ausschließlich an GitHub-Tickets gearbeitet.
 - Eine Anfrage ohne Ticket wird zuerst als konkreter Ticketvorschlag formuliert.
-- Erst nach der ausdrücklichen Eingabe `START #<Nummer>` beginnt die Arbeit.
+- Die Arbeit beginnt nach einer eindeutigen Freigabe in natürlicher Sprache, zum Beispiel „Bearbeite #12“ oder „Starte die Tickets #12 und #13“.
+- `START #<Nummer>` bleibt eine mögliche Kurzform, ist aber nicht verpflichtend.
 - Eine Ausnahme gilt nur, wenn der Nutzer ausdrücklich erklärt, dass die Anfrage kein Ticket ist.
 - Die Zusammenarbeit bleibt im bestehenden Codex-Task; ein neuer Task oder Prompt ist nicht erforderlich.
+- Ein einzelner Codex-Task darf mehrere Tickets nacheinander bearbeiten.
 
 ## Start eines Tickets
 
 1. Ticket prüfen oder bei Bedarf anlegen.
 2. Ziel, Umfang und Akzeptanzkriterien kurz bestätigen.
 3. Einen Branch von aktuellem `main` erstellen: `ticket/<Nummer>-<kurzer-name>`.
-4. Den Branch und den Beginn der Arbeit im Task mitteilen.
+4. Den Branch und den Beginn der Arbeit im bestehenden Task mitteilen.
+
+Bei mehreren Tickets im selben Task wird klar benannt, welches Ticket gerade aktiv ist. Eng zusammenhängende Tickets dürfen nach Nutzerwunsch auf demselben Branch bearbeitet werden.
 
 ## Umsetzung und Rückfragen
 
 - Nur Änderungen umsetzen, die zum aktiven Ticket gehören.
-- Notwendige fachliche oder technische Entscheidungen mit dem Nutzer klären.
+- Notwendige fachliche oder technische Entscheidungen mit dem Nutzer in kurzen Rückfragen im bestehenden Task klären.
 - Zwischenergebnisse knapp vorstellen und iterieren, bis der Nutzer zufrieden ist.
 - Keine eigenmächtigen Pushes, Merges oder Branch-Löschungen.
+- Ein separates Eingabefenster wird nicht vorausgesetzt; natürliche Antworten des Nutzers genügen.
 
 ## Commits
 
@@ -44,6 +49,8 @@ Nach der Nutzerfreigabe:
 6. Danach den Ticket-Branch lokal und auf GitHub löschen.
 7. Den Abschluss im Ticket dokumentieren und passende nächste Tickets vorschlagen.
 
+Eine ausdrückliche Freigabe darf mehrere Schritte in einer Nachricht erlauben, beispielsweise: „Wenn die Prüfung sauber ist, committe, pushe, merge und lösche den Branch.“ In diesem Fall werden genau diese Schritte ohne zusätzliche Rückfrage ausgeführt.
+
 ## Nächstes Ticket
 
-Am Ende jeder Ticketbearbeitung werden zwei bis vier konkrete nächste Tickets vorgeschlagen. Danach wird auf `START #<Nummer>` gewartet; es wird nicht automatisch ein weiteres Ticket begonnen.
+Am Ende jeder Ticketbearbeitung werden zwei bis vier konkrete nächste Tickets vorgeschlagen. Danach wird auf eine natürliche Arbeitsfreigabe gewartet; es wird nicht automatisch ein weiteres Ticket begonnen.
