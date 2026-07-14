@@ -6,6 +6,8 @@ import { AuthController } from "./auth/auth.controller.js";
 import { AuthService } from "./auth/auth.service.js";
 import { SessionGuard } from "./auth/session.guard.js";
 import { HealthController } from "./health.controller.js";
+import { LobbiesController } from "./lobbies/lobbies.controller.js";
+import { LobbiesService } from "./lobbies/lobbies.service.js";
 import { PrismaService } from "./prisma.service.js";
 import { ObjectStorageService } from "./profiles/object-storage.service.js";
 import { ProfilesController } from "./profiles/profiles.controller.js";
@@ -13,13 +15,14 @@ import { ProfilesService } from "./profiles/profiles.service.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
-  controllers: [HealthController, AuthController, ProfilesController],
+  controllers: [HealthController, AuthController, ProfilesController, LobbiesController],
   providers: [
     PrismaService,
     AuthService,
     SessionGuard,
     ProfilesService,
     ObjectStorageService,
+    LobbiesService,
     { provide: APP_GUARD, useClass: ThrottlerGuard }
   ]
 })

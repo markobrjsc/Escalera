@@ -19,6 +19,60 @@ model User {
   sessions           Session[]
   statistic          UserStatistic?
   achievementProgress AchievementProgress[]
+  hostedLobbies       Lobby[]              @relation("LobbyHost")
+  lobbyMemberships    LobbyPlayer[]
+}
+
+enum LobbyStatus {
+  OPEN
+  ACTIVE
+  CLOSED
+}
+
+enum GameStatus {
+  ACTIVE
+  FINISHED
+}
+
+model Lobby {
+  id                     String       @id @default(cuid())
+  code                   String       @unique
+  hostId                 String
+  status                 LobbyStatus  @default(OPEN)
+  maxPlayers             Int          @default(6)
+  jokersPerPlayer        Int          @default(1)
+  maxTurnSeconds         Int?
+  streetsRequireSameSuit Boolean      @default(false)
+  createdAt              DateTime     @default(now())
+  expiresAt              DateTime?
+  host                   User         @relation("LobbyHost", fields: [hostId], references: [id], onDelete: Restrict)
+  players                LobbyPlayer[]
+  game                   Game?
+}
+
+model LobbyPlayer {
+  id       String   @id @default(cuid())
+  lobbyId  String
+  userId   String
+  ready    Boolean  @default(false)
+  joinedAt DateTime @default(now())
+  lobby    Lobby    @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lobbyId, userId])
+  @@index([userId])
+}
+
+model Game {
+  id        String     @id @default(cuid())
+  lobbyId   String     @unique
+  status    GameStatus @default(ACTIVE)
+  phase     Int        @default(1)
+  version   Int        @default(1)
+  state     Json
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  lobby     Lobby      @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
 }
 
 model Session {
