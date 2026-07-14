@@ -15,4 +15,5 @@
 
 ## Freigabe
 
-- [ ] Nutzerfreigabe für Merge liegt vor
+- [ ] Eindeutige Nutzerfreigabe für Merge liegt vor
+- [ ] Falls mehrere Schritte in einer Nachricht freigegeben wurden: Umfang der Freigabe dokumentiert
