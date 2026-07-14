@@ -1,6 +1,5 @@
 # Escalera Client
 
-Hier entsteht später die eigenständige installierbare PWA für iOS und Android.
+Der Client ist eine eigenständige React-/Vite-Anwendung. Er wird getrennt gebaut und in einem eigenen Nginx-Dockercontainer ausgeliefert.
 
-Der Client wird separat gebaut und in einem eigenen Dockercontainer ausgeliefert. Aktuell enthält dieser Ordner bewusst noch keinen Anwendungscode.
-
+Aktuell enthält er nur die technische Startansicht. Installation als PWA, Vollbildverhalten und Spieloberfläche werden in weiteren Tickets ergänzt.

@@ -20,7 +20,7 @@ Der Client enthält keine vertrauliche Spiellogik und keine Datenbankzugänge. D
 
 ## Lokale Umgebung
 
-Docker Compose wird später mindestens diese Dienste starten:
+Docker Compose startet mindestens diese Dienste:
 
 1. `client`
 2. `server`
@@ -62,4 +62,3 @@ Vor einer Bereitstellung müssen erfolgreich sein:
 - Healthchecks aller Dienste
 - Integrationstest des vollständigen Compose-Verbunds
 - Prüfung auf versehentlich eingecheckte Geheimnisse
-
