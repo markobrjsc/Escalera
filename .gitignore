@@ -30,3 +30,4 @@ test-results/
 
 # Local data volumes
 .data/
+.tools/
