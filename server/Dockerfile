@@ -9,6 +9,9 @@ COPY packages/game-rules/package.json packages/game-rules/package.json
 RUN npm ci
 
 COPY tsconfig.base.json ./
+COPY server/prisma server/prisma
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+RUN npm run db:generate --workspace=@escalera/server
 COPY server server
 RUN npm run build --workspace=@escalera/server
 
@@ -23,8 +26,11 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/game-rules/package.json packages/game-rules/package.json
 RUN npm ci --omit=dev --workspace=@escalera/server
 
+COPY server/prisma server/prisma
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+RUN npm run db:generate --workspace=@escalera/server
 COPY --from=build /app/server/dist server/dist
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 CMD node -e "fetch('http://localhost:3000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
-CMD ["node", "server/dist/main.js"]
+CMD ["sh", "-c", "npm run db:migrate --workspace=@escalera/server && node server/dist/main.js"]
