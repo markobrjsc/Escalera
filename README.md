@@ -4,7 +4,7 @@ Escalera ist ein geplantes mobiles Mehrspieler-Kartenspiel für iOS und Android.
 
 ## Aktueller Stand
 
-Das Projekt befindet sich in der Anforderungs- und Planungsphase. Es ist noch kein Anwendungscode vorhanden.
+Das Projekt enthält ein lauffähiges technisches Grundgerüst. Die Spiellogik für Karten, Gruppen, Straßen, Phasen und Punkte liegt als getestetes gemeinsames Paket vor. Die eigentliche Spieloberfläche, Konten und Echtzeit-Lobbys folgen in weiteren Tickets.
 
 Die fachlichen und technischen Entscheidungen befinden sich im Ordner [Documentation](Documentation/README.md).
 
@@ -18,3 +18,29 @@ Die verbindliche Zusammenarbeit über Tickets, Branches und Commits ist in [Docu
 - `infrastructure/` – Docker- und Bereitstellungskonfiguration
 
 Client und Server werden getrennt gebaut und in getrennten Dockercontainern ausgeführt.
+
+## Lokal starten
+
+Voraussetzungen: Docker Desktop mit Docker Compose.
+
+1. `.env.example` nach `.env` kopieren und die lokalen Zugangsdaten bei Bedarf ändern.
+2. Den Verbund starten:
+
+   ```powershell
+   docker compose up --build
+   ```
+
+3. Client: `http://localhost:8080`
+4. Server-Gesundheitsprüfung: `http://localhost:3000/health`
+5. MinIO-Konsole: `http://localhost:9001`
+
+Der Verbund startet getrennte Container für Client, Server, PostgreSQL, Redis und lokalen Objektspeicher.
+
+## Qualität prüfen
+
+```powershell
+npm.cmd run typecheck
+npm.cmd test
+npm.cmd run build
+docker compose build
+```
