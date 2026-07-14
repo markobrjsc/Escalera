@@ -4,7 +4,7 @@ Escalera ist ein geplantes mobiles Mehrspieler-Kartenspiel für iOS und Android.
 
 ## Aktueller Stand
 
-Das Projekt enthält ein lauffähiges technisches Grundgerüst. Die eigentliche Spiellogik, Spieloberfläche, Konten und Echtzeit-Lobbys folgen in weiteren Tickets.
+Das Projekt enthält ein lauffähiges technisches Grundgerüst. Die Spiellogik für Karten, Gruppen, Straßen, Phasen und Punkte liegt als getestetes gemeinsames Paket vor. Die eigentliche Spieloberfläche, Konten und Echtzeit-Lobbys folgen in weiteren Tickets.
 
 Die fachlichen und technischen Entscheidungen befinden sich im Ordner [Documentation](Documentation/README.md).
 

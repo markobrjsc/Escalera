@@ -5,6 +5,7 @@ COPY package.json package-lock.json ./
 COPY client/package.json client/package.json
 COPY server/package.json server/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/game-rules/package.json packages/game-rules/package.json
 RUN npm ci
 
 COPY tsconfig.base.json ./
@@ -19,6 +20,7 @@ COPY package.json package-lock.json ./
 COPY client/package.json client/package.json
 COPY server/package.json server/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/game-rules/package.json packages/game-rules/package.json
 RUN npm ci --omit=dev --workspace=@escalera/server
 
 COPY --from=build /app/server/dist server/dist
