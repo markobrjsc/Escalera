@@ -63,6 +63,12 @@ export class ProfilesService {
     return this.prisma.user.update({ where: { id: userId }, data: { tutorialCompleted: true } });
   }
 
+  async getPublicUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, avatarKey: true } });
+    if (!user) throw new NotFoundException("Spielerprofil nicht gefunden.");
+    return user;
+  }
+
   async getAvatar(userId: string, requestedSize: number) {
     const size = requestedSize <= 128 ? 128 : 512;
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
