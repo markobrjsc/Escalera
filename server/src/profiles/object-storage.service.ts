@@ -1,4 +1,4 @@
-import { CreateBucketCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, DeleteObjectsCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Injectable } from "@nestjs/common";
 
 @Injectable()
@@ -22,6 +22,21 @@ export class ObjectStorageService {
       Key: key,
       Body: body,
       ContentType: "image/webp"
+    }));
+  }
+
+  async getProfileImage(key: string) {
+    await this.ensureBucket();
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return result.Body?.transformToByteArray();
+  }
+
+  async deleteProfileImages(keys: string[]) {
+    if (!keys.length) return;
+    await this.ensureBucket();
+    await this.client.send(new DeleteObjectsCommand({
+      Bucket: this.bucket,
+      Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true }
     }));
   }
 

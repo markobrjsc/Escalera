@@ -9,7 +9,7 @@ import { PresenceService } from "../realtime/presence.service.js";
 import { LobbyLifecycleService } from "./lobby-lifecycle.service.js";
 
 const lobbyInclude = {
-  host: { select: { id: true, username: true } },
+  host: { select: { id: true, username: true, avatarKey: true } },
   players: { include: { user: { select: { id: true, username: true, avatarKey: true } } }, orderBy: { joinedAt: "asc" as const } },
   game: true
 };
