@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service.js";
-import { addCardToMeld, buyDiscard, discardCard, drawCard, GameActionError, layAdditionalMeld, layPhase } from "./game-engine.js";
+import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, GameActionError, layAdditionalMeld, layPhase } from "./game-engine.js";
 import { normalizeGameState, toPlayerGameView, type GameState } from "./game-state.js";
 
 type LoadedGame = Prisma.GameGetPayload<{ include: { lobby: { include: { players: true } } } }>;
@@ -32,6 +32,26 @@ export class GamesService {
 
   buy(userId: string, code: string) {
     return this.mutate(userId, code, (state) => buyDiscard(state, userId));
+  }
+
+  async expireDueTurns(now = Date.now()) {
+    const games = await this.prisma.game.findMany({ where: { status: "ACTIVE" }, include: { lobby: { include: { players: true } } } });
+    const changedCodes: string[] = [];
+    for (const game of games) {
+      const current = normalizeGameState(game.state as unknown as GameState);
+      if (!current.turn.deadlineAt || Date.parse(current.turn.deadlineAt) > now) continue;
+      let state: GameState;
+      try { state = expireTurn(structuredClone(current), now); } catch (error) {
+        if (error instanceof GameActionError) continue;
+        throw error;
+      }
+      const updated = await this.prisma.game.updateMany({
+        where: { id: game.id, version: game.version, status: "ACTIVE" },
+        data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
+      });
+      if (updated.count === 1) changedCodes.push(game.lobby.code);
+    }
+    return changedCodes;
   }
 
   private async mutate(userId: string, code: string, action: (state: GameState, game: LoadedGame) => GameState) {

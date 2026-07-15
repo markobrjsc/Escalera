@@ -99,7 +99,7 @@ export class LobbiesService {
   }
 
   private async createGame(lobby: Awaited<ReturnType<LobbiesService["getLobby"]>>) {
-    const state = createInitialGameState(lobby.players.map((player) => player.userId), lobby.jokersPerPlayer);
+    const state = createInitialGameState(lobby.players.map((player) => player.userId), lobby.jokersPerPlayer, undefined, lobby.maxTurnSeconds);
     await this.prisma.$transaction(async (transaction) => {
       const updated = await transaction.lobby.updateMany({ where: { id: lobby.id, status: "OPEN" }, data: { status: "ACTIVE" } });
       if (updated.count !== 1) return;

@@ -1,6 +1,6 @@
 import { handPoints, validateGroup, validatePhase, validateStreet, type Phase } from "@escalera/game-rules";
 import { randomUUID } from "node:crypto";
-import { buildDeck, type GameCard, type GameMeld, type GameState, normalizeGameState, shuffle } from "./game-state.js";
+import { buildDeck, type GameCard, type GameMeld, type GameState, nextTurnDeadline, normalizeGameState, shuffle } from "./game-state.js";
 
 export class GameActionError extends Error {}
 
@@ -109,7 +109,7 @@ export function addCardToMeld(rawState: GameState, userId: string, meldId: strin
   return state;
 }
 
-export function discardCard(rawState: GameState, userId: string, cardId: string, random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper)) {
+export function discardCard(rawState: GameState, userId: string, cardId: string, random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper), now = Date.now()) {
   const state = normalizeGameState(rawState);
   const current = activePlayer(state, userId);
   requireDrawn(state);
@@ -118,15 +118,29 @@ export function discardCard(rawState: GameState, userId: string, cardId: string,
   state.discardPile.push(card);
   state.discardOffer = { cardId: card.id, offeredById: userId };
   if (!current.hand.length) {
-    return completeRound(state, userId, random);
+    return completeRound(state, userId, random, now);
   }
   const index = state.players.findIndex((entry) => entry.userId === userId);
   state.activePlayerId = state.players[(index + 1) % state.players.length].userId;
-  state.turn = { hasDrawn: false };
+  state.turn = { hasDrawn: false, deadlineAt: nextTurnDeadline(state.maxTurnSeconds, now) };
   return state;
 }
 
-function completeRound(state: GameState, endedById: string, random: (upperExclusive: number) => number) {
+export function expireTurn(rawState: GameState, now = Date.now(), random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper)) {
+  let state = normalizeGameState(rawState);
+  if (state.status === "FINISHED") throw new GameActionError("Die Partie ist bereits beendet.");
+  const deadline = state.turn.deadlineAt ? Date.parse(state.turn.deadlineAt) : Number.POSITIVE_INFINITY;
+  if (deadline > now) throw new GameActionError("Die Zugzeit ist noch nicht abgelaufen.");
+  const userId = state.activePlayerId;
+  if (!state.turn.hasDrawn) state = drawCard(state, userId, "draw", random);
+  const current = player(state, userId);
+  current.timeouts += 1;
+  const discarded = current.hand[random(current.hand.length)];
+  if (!discarded) throw new GameActionError("Für den automatischen Zugabschluss ist keine Handkarte vorhanden.");
+  return discardCard(state, userId, discarded.id, random, now);
+}
+
+function completeRound(state: GameState, endedById: string, random: (upperExclusive: number) => number, now = Date.now()) {
   const scores = state.players.map((entry) => {
     const penalty = handPoints(entry.hand);
     entry.totalPenalty += penalty;
@@ -161,7 +175,7 @@ function completeRound(state: GameState, endedById: string, random: (upperExclus
   state.drawPile = cards;
   state.discardPile = [discardTop];
   state.melds = [];
-  state.turn = { hasDrawn: false };
+  state.turn = { hasDrawn: false, deadlineAt: nextTurnDeadline(state.maxTurnSeconds, now) };
   state.roundEndedById = null;
   return state;
 }

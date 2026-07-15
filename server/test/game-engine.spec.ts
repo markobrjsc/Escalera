@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCardToMeld, buyDiscard, discardCard, drawCard, layAdditionalMeld, layPhase } from "../src/game/game-engine.js";
+import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, layAdditionalMeld, layPhase } from "../src/game/game-engine.js";
 import type { GameCard, GameState } from "../src/game/game-state.js";
 
 const card = (id: string, rank: "3" | "5" | "7" | "8" | "9" | "10", suit: "clubs" | "hearts" | "spades" = "clubs"): GameCard => ({ id, kind: "standard", deck: 1, rank, suit });
@@ -8,16 +8,17 @@ const baseState = (): GameState => ({
   round: 1,
   phase: 1,
   jokersPerPlayer: 1,
+  maxTurnSeconds: 60,
   activePlayerId: "p1",
   players: [
-    { userId: "p1", hand: [card("5c", "5"), card("5h", "5", "hearts"), card("5s", "5", "spades"), card("7c", "7")], coins: 7, phaseLaid: false, totalPenalty: 0 },
-    { userId: "p2", hand: [card("8c", "8")], coins: 7, phaseLaid: false, totalPenalty: 0 },
-    { userId: "p3", hand: [card("9c", "9")], coins: 7, phaseLaid: false, totalPenalty: 0 }
+    { userId: "p1", hand: [card("5c", "5"), card("5h", "5", "hearts"), card("5s", "5", "spades"), card("7c", "7")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0 },
+    { userId: "p2", hand: [card("8c", "8")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0 },
+    { userId: "p3", hand: [card("9c", "9")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0 }
   ],
   drawPile: [card("3c", "3")],
   discardPile: [card("10c", "10")],
   melds: [],
-  turn: { hasDrawn: false },
+  turn: { hasDrawn: false, deadlineAt: "2026-07-15T12:00:00.000Z" },
   discardOffer: null,
   roundEndedById: null,
   roundResults: [],
@@ -124,5 +125,23 @@ describe("autoritärer Spielzug", () => {
     ]);
     expect(() => drawCard(result, "p1", "draw")).toThrow("Partie ist bereits beendet");
     expect(() => buyDiscard(result, "p2")).toThrow("Partie ist bereits beendet");
+  });
+
+  it("zieht bei Zeitablauf nötigenfalls und wirft genau eine zufällige Karte ab", () => {
+    const state = baseState();
+    const expiredAt = Date.parse(state.turn.deadlineAt!);
+    const result = expireTurn(state, expiredAt, () => 0);
+    expect(result.activePlayerId).toBe("p2");
+    expect(result.players[0].timeouts).toBe(1);
+    expect(result.players[0].hand).toHaveLength(4);
+    expect(result.discardOffer).not.toBeNull();
+    expect(Date.parse(result.turn.deadlineAt!)).toBe(expiredAt + 60_000);
+  });
+
+  it("verändert einen noch nicht abgelaufenen Zug nicht", () => {
+    const state = baseState();
+    const before = JSON.stringify(state);
+    expect(() => expireTurn(state, Date.parse(state.turn.deadlineAt!) - 1, () => 0)).toThrow("noch nicht abgelaufen");
+    expect(JSON.stringify(state)).toBe(before);
   });
 });

@@ -15,6 +15,7 @@ import { ProfilesService } from "./profiles/profiles.service.js";
 import { RealtimeGateway } from "./realtime/realtime.gateway.js";
 import { GamesController } from "./game/games.controller.js";
 import { GamesService } from "./game/games.service.js";
+import { TurnTimerService } from "./game/turn-timer.service.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
@@ -28,6 +29,7 @@ import { GamesService } from "./game/games.service.js";
     LobbiesService,
     RealtimeGateway,
     GamesService,
+    TurnTimerService,
     { provide: APP_GUARD, useClass: ThrottlerGuard }
   ]
 })
