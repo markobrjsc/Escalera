@@ -12,6 +12,7 @@ import { PrismaService } from "./prisma.service.js";
 import { ObjectStorageService } from "./profiles/object-storage.service.js";
 import { ProfilesController } from "./profiles/profiles.controller.js";
 import { ProfilesService } from "./profiles/profiles.service.js";
+import { RealtimeGateway } from "./realtime/realtime.gateway.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
@@ -23,6 +24,7 @@ import { ProfilesService } from "./profiles/profiles.service.js";
     ProfilesService,
     ObjectStorageService,
     LobbiesService,
+    RealtimeGateway,
     { provide: APP_GUARD, useClass: ThrottlerGuard }
   ]
 })

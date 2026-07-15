@@ -73,6 +73,11 @@ export class LobbiesService {
     return { version: lobby.game.version, state: toPlayerGameView(lobby.game.state as unknown as GameState, userId) };
   }
 
+  async getRealtimeUpdate(code: string) {
+    const lobby = await this.getLobby(code);
+    return { lobby: this.publicLobby(lobby), playerIds: lobby.players.map((player) => player.userId) };
+  }
+
   private async getLobby(code: string) {
     const lobby = await this.prisma.lobby.findUnique({ where: { code: code.toUpperCase() }, include: lobbyInclude });
     if (!lobby) throw new NotFoundException("Lobby nicht gefunden.");
