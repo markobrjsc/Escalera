@@ -4,7 +4,9 @@ import type { GameCard, GameState } from "../src/game/game-state.js";
 
 const card = (id: string, rank: "3" | "5" | "7" | "8" | "9" | "10", suit: "clubs" | "hearts" | "spades" = "clubs"): GameCard => ({ id, kind: "standard", deck: 1, rank, suit });
 const baseState = (): GameState => ({
+  round: 1,
   phase: 1,
+  jokersPerPlayer: 1,
   activePlayerId: "p1",
   players: [
     { userId: "p1", hand: [card("5c", "5"), card("5h", "5", "hearts"), card("5s", "5", "spades"), card("7c", "7")], coins: 7, phaseLaid: false, totalPenalty: 0 },
@@ -16,7 +18,8 @@ const baseState = (): GameState => ({
   melds: [],
   turn: { hasDrawn: false },
   discardOffer: null,
-  roundEndedById: null
+  roundEndedById: null,
+  roundResults: []
 });
 
 describe("autoritärer Spielzug", () => {
@@ -61,5 +64,40 @@ describe("autoritärer Spielzug", () => {
     const before = JSON.stringify(state);
     expect(() => layPhase(state, "p1", [["5c", "5h", "7c"]])).toThrow("Ziehe zuerst");
     expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("wertet eine beendete Runde genau einmal und startet die gemeinsame nächste Phase", () => {
+    const state = baseState();
+    state.turn.hasDrawn = true;
+    state.players[0].hand = [card("last", "7")];
+    state.players[1].hand = [card("eight", "8")];
+    state.players[2].hand = [{ id: "joker-test", kind: "joker" }];
+    state.players[1].totalPenalty = 5;
+    state.players[2].totalPenalty = 20;
+
+    const result = discardCard(state, "p1", "last", () => 0);
+
+    expect(result.round).toBe(2);
+    expect(result.phase).toBe(2);
+    expect(result.roundResults).toEqual([{ round: 1, phase: 1, endedById: "p1", scores: [
+      { userId: "p1", penalty: 0, totalPenalty: 0 },
+      { userId: "p2", penalty: 10, totalPenalty: 15 },
+      { userId: "p3", penalty: 30, totalPenalty: 50 }
+    ] }]);
+    expect(result.activePlayerId).toBe("p3");
+    expect(result.players.every((entry) => entry.hand.length === 11 && entry.coins === 7 && !entry.phaseLaid)).toBe(true);
+    expect(result.melds).toEqual([]);
+    expect(result.discardPile).toHaveLength(1);
+  });
+
+  it("entscheidet den Startspieler bei gleichen höchsten Strafpunkten zufällig", () => {
+    const state = baseState();
+    state.turn.hasDrawn = true;
+    state.players[0].hand = [card("last", "7")];
+    state.players[1].hand = [card("p2-eight", "8")];
+    state.players[2].hand = [card("p3-eight", "8")];
+    let call = 0;
+    const result = discardCard(state, "p1", "last", (upper) => call++ === 0 ? Math.min(1, upper - 1) : 0);
+    expect(result.activePlayerId).toBe("p3");
   });
 });

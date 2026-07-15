@@ -23,8 +23,17 @@ export interface GameMeld {
   sameSuit: boolean;
 }
 
-export interface GameState {
+export interface RoundResult {
+  round: number;
   phase: number;
+  endedById: string;
+  scores: Array<{ userId: string; penalty: number; totalPenalty: number }>;
+}
+
+export interface GameState {
+  round: number;
+  phase: number;
+  jokersPerPlayer: number;
   activePlayerId: string;
   players: GamePlayerState[];
   drawPile: GameCard[];
@@ -33,9 +42,11 @@ export interface GameState {
   turn: { hasDrawn: boolean };
   discardOffer: { cardId: string; offeredById: string } | null;
   roundEndedById: string | null;
+  roundResults: RoundResult[];
 }
 
 export interface PlayerGameView {
+  round: number;
   phase: number;
   activePlayerId: string;
   drawPileCount: number;
@@ -44,6 +55,7 @@ export interface PlayerGameView {
   turn: { hasDrawn: boolean; canAct: boolean };
   melds: GameMeld[];
   roundEndedById: string | null;
+  lastRoundResult: RoundResult | null;
   players: Array<{ userId: string; handCount: number; coins: number; phaseLaid: boolean; totalPenalty: number }>;
   ownHand: GameCard[];
 }
@@ -70,17 +82,22 @@ export function createInitialGameState(playerIds: readonly string[], jokersPerPl
   const players = playerIds.map((userId) => ({ userId, hand: cards.splice(0, 11), coins: 7, phaseLaid: false, totalPenalty: 0 }));
   const discardTop = cards.shift();
   if (!discardTop) throw new Error("Kartensatz enthält zu wenige Karten.");
-  return { phase: 1, activePlayerId: playerIds[random(playerIds.length)], players, drawPile: cards, discardPile: [discardTop], melds: [], turn: { hasDrawn: false }, discardOffer: null, roundEndedById: null };
+  return { round: 1, phase: 1, jokersPerPlayer, activePlayerId: playerIds[random(playerIds.length)], players, drawPile: cards, discardPile: [discardTop], melds: [], turn: { hasDrawn: false }, discardOffer: null, roundEndedById: null, roundResults: [] };
 }
 
 export function normalizeGameState(state: GameState): GameState {
+  const allCards = [...state.players.flatMap((player) => player.hand), ...state.drawPile, ...state.discardPile, ...(state.melds ?? []).flatMap((meld) => meld.cards)];
+  const jokerCount = new Set(allCards.filter((card) => card.kind === "joker").map((card) => card.id)).size;
   return {
     ...state,
+    round: state.round ?? state.phase ?? 1,
+    jokersPerPlayer: state.jokersPerPlayer ?? Math.round(jokerCount / state.players.length),
     players: state.players.map((player) => ({ ...player, phaseLaid: player.phaseLaid ?? false, totalPenalty: player.totalPenalty ?? 0 })),
     melds: state.melds ?? [],
     turn: state.turn ?? { hasDrawn: false },
     discardOffer: state.discardOffer ?? null,
-    roundEndedById: state.roundEndedById ?? null
+    roundEndedById: state.roundEndedById ?? null,
+    roundResults: state.roundResults ?? []
   };
 }
 
@@ -89,6 +106,7 @@ export function toPlayerGameView(rawState: GameState, viewerId: string): PlayerG
   const ownState = state.players.find((player) => player.userId === viewerId);
   if (!ownState) throw new Error("Spieler gehört nicht zu dieser Partie.");
   return {
+    round: state.round,
     phase: state.phase,
     activePlayerId: state.activePlayerId,
     drawPileCount: state.drawPile.length,
@@ -97,6 +115,7 @@ export function toPlayerGameView(rawState: GameState, viewerId: string): PlayerG
     turn: { hasDrawn: state.turn.hasDrawn, canAct: viewerId === state.activePlayerId && !state.roundEndedById },
     melds: state.melds,
     roundEndedById: state.roundEndedById,
+    lastRoundResult: state.roundResults.at(-1) ?? null,
     players: state.players.map((player) => ({ userId: player.userId, handCount: player.hand.length, coins: player.coins, phaseLaid: player.phaseLaid, totalPenalty: player.totalPenalty })),
     ownHand: ownState.hand
   };

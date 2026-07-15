@@ -1,6 +1,6 @@
-import { validateGroup, validatePhase, validateStreet, type Phase } from "@escalera/game-rules";
+import { handPoints, validateGroup, validatePhase, validateStreet, type Phase } from "@escalera/game-rules";
 import { randomUUID } from "node:crypto";
-import { type GameCard, type GameMeld, type GameState, normalizeGameState, shuffle } from "./game-state.js";
+import { buildDeck, type GameCard, type GameMeld, type GameState, normalizeGameState, shuffle } from "./game-state.js";
 
 export class GameActionError extends Error {}
 
@@ -108,7 +108,7 @@ export function addCardToMeld(rawState: GameState, userId: string, meldId: strin
   return state;
 }
 
-export function discardCard(rawState: GameState, userId: string, cardId: string) {
+export function discardCard(rawState: GameState, userId: string, cardId: string, random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper)) {
   const state = normalizeGameState(rawState);
   const current = activePlayer(state, userId);
   requireDrawn(state);
@@ -117,12 +117,46 @@ export function discardCard(rawState: GameState, userId: string, cardId: string)
   state.discardPile.push(card);
   state.discardOffer = { cardId: card.id, offeredById: userId };
   if (!current.hand.length) {
-    state.roundEndedById = userId;
-    return state;
+    return completeRound(state, userId, random);
   }
   const index = state.players.findIndex((entry) => entry.userId === userId);
   state.activePlayerId = state.players[(index + 1) % state.players.length].userId;
   state.turn = { hasDrawn: false };
+  return state;
+}
+
+function completeRound(state: GameState, endedById: string, random: (upperExclusive: number) => number) {
+  const scores = state.players.map((entry) => {
+    const penalty = handPoints(entry.hand);
+    entry.totalPenalty += penalty;
+    return { userId: entry.userId, penalty, totalPenalty: entry.totalPenalty };
+  });
+  state.roundResults.push({ round: state.round, phase: state.phase, endedById, scores });
+  state.discardOffer = null;
+  if (state.phase >= 7) {
+    state.roundEndedById = endedById;
+    return state;
+  }
+
+  const highestPenalty = Math.max(...state.players.map((entry) => entry.totalPenalty));
+  const starters = state.players.filter((entry) => entry.totalPenalty === highestPenalty);
+  const nextStarter = starters[random(starters.length)];
+  const cards = shuffle(buildDeck(state.players.length, state.jokersPerPlayer), random);
+  for (const entry of state.players) {
+    entry.hand = cards.splice(0, 11);
+    entry.coins = 7;
+    entry.phaseLaid = false;
+  }
+  const discardTop = cards.shift();
+  if (!discardTop) throw new GameActionError("Kartensatz enthält zu wenige Karten für die nächste Runde.");
+  state.round += 1;
+  state.phase += 1;
+  state.activePlayerId = nextStarter.userId;
+  state.drawPile = cards;
+  state.discardPile = [discardTop];
+  state.melds = [];
+  state.turn = { hasDrawn: false };
+  state.roundEndedById = null;
   return state;
 }
 
