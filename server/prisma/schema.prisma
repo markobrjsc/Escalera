@@ -61,7 +61,7 @@ model LobbyPlayer {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([lobbyId, userId])
-  @@index([userId])
+  @@unique([userId])
 }
 
 model Game {

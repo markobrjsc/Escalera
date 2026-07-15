@@ -58,7 +58,15 @@ export function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
 
-  useEffect(() => { api<{ user: User }>("/auth/me").then((result) => setUser(result.user)).catch(() => undefined).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    api<{ user: User }>("/auth/me").then(async (result) => {
+      setUser(result.user);
+      const current = await api<Lobby | null>("/lobbies/current");
+      if (!current) return;
+      setLobby(current);
+      if (current.status !== "OPEN") setGame(await api<Game>(`/lobbies/${current.code}/game`));
+    }).catch(() => undefined).finally(() => setLoading(false));
+  }, []);
   useEffect(() => {
     if (!user) return;
     const live = io(`${SOCKET_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
