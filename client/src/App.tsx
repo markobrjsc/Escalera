@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const API_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
+const API_URL = "/api";
+const SOCKET_URL = window.location.origin;
 
 type User = { id: string; username: string; avatarKey: string | null; tutorialCompleted: boolean };
 type Lobby = {
@@ -57,7 +58,7 @@ export function App() {
   useEffect(() => { api<{ user: User }>("/auth/me").then((result) => setUser(result.user)).catch(() => undefined).finally(() => setLoading(false)); }, []);
   useEffect(() => {
     if (!user) return;
-    const live = io(`${API_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
+    const live = io(`${SOCKET_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
     live.on("realtime:connected", () => { setConnected(true); setSocket(live); }); live.on("disconnect", () => { setConnected(false); setSocket(null); });
     live.on("lobby:update", (value: Lobby) => setLobby(value)); live.on("game:update", (value: Game) => setGame(value));
     live.on("lobby:deleted", () => { setLobby(null); setGame(null); setError("Die Lobby wurde wegen Inaktivität geschlossen."); });

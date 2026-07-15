@@ -1,5 +1,11 @@
 # Docker und Bereitstellung
 
+## Öffentlicher Einstiegspunkt
+
+Der Client-/Nginx-Container ist der einzige öffentliche Dienst. PWA, API und Socket.IO verwenden dieselbe Origin. HTTP-Aufrufe laufen unter `/api`, WebSocket-Verbindungen unter `/socket.io`; der Serverport bleibt innerhalb des Docker-Netzes.
+
+In Produktion terminiert ein vorgeschalteter Hosting-Proxy HTTPS und leitet `X-Forwarded-Proto` weiter. `CLIENT_ORIGIN` enthält die vollständige öffentliche HTTPS-Origin. Lokale und produktive Details stehen in `infrastructure/README.md`.
+
 ## Verbindliche Entscheidung
 
 Alle Bestandteile von Escalera werden containerisiert. Docker ist kein optionales Hilfsmittel, sondern die festgelegte Entwicklungs- und Betriebsumgebung.
