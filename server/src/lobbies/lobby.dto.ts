@@ -1,6 +1,12 @@
-import { IsBoolean, IsInt, IsOptional, Max, Min } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 
 export class CreateLobbyDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(40)
+  name?: string;
+
   @IsOptional()
   @IsInt()
   @Min(2)
@@ -23,7 +29,4 @@ export class CreateLobbyDto {
   @IsBoolean()
   streetsRequireSameSuit = false;
 
-  @IsOptional()
-  @IsBoolean()
-  confirmTurnEnd = true;
 }

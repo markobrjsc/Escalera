@@ -21,8 +21,9 @@ export class LobbiesService {
   async create(userId: string, input: CreateLobbyDto) {
     await this.assertNoOtherLobby(userId);
     const code = await this.newCode();
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } });
     return this.prisma.lobby.create({
-      data: { ...input, code, hostId: userId, players: { create: { userId } } },
+      data: { ...input, name: input.name?.trim() || `${user.username}'s Lobby`, code, hostId: userId, players: { create: { userId } } },
       include: lobbyInclude
     });
   }
@@ -32,7 +33,7 @@ export class LobbiesService {
     const lobbies = await this.prisma.lobby.findMany({
       where: {
         status: "OPEN",
-        ...(query ? { OR: [{ code: { contains: query.toUpperCase() } }, { host: { username: { contains: query, mode: "insensitive" } } }] } : {})
+        ...(query ? { OR: [{ code: { contains: query.toUpperCase() } }, { name: { contains: query, mode: "insensitive" } }, { host: { username: { contains: query, mode: "insensitive" } } }] } : {})
       },
       include: lobbyInclude,
       orderBy: { createdAt: "desc" },
@@ -145,6 +146,7 @@ export class LobbiesService {
   private publicLobby(lobby: Awaited<ReturnType<LobbiesService["getLobby"]>>) {
     return {
       code: lobby.code,
+      name: lobby.name,
       status: lobby.status,
       host: lobby.host,
       settings: {
