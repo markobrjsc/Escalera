@@ -2,15 +2,27 @@ import { Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, Streama
 import { FileInterceptor } from "@nestjs/platform-express";
 import { AuthenticatedRequest, SessionGuard } from "../auth/session.guard.js";
 import { ProfilesService } from "./profiles.service.js";
+import { StatisticsService } from "./statistics.service.js";
 
 @Controller("profile")
 @UseGuards(SessionGuard)
 export class ProfilesController {
-  constructor(private readonly profiles: ProfilesService) {}
+  constructor(private readonly profiles: ProfilesService, private readonly statistics: StatisticsService) {}
 
   @Get()
   getProfile(@Req() request: AuthenticatedRequest) {
     return { user: request.user };
+  }
+
+  @Get("statistics")
+  getStatistics(@Req() request: AuthenticatedRequest) {
+    return this.statistics.profile(request.user.id);
+  }
+
+  @Get("users/:userId")
+  async getPublicProfile(@Param("userId") userId: string) {
+    const [user, profile] = await Promise.all([this.profiles.getPublicUser(userId), this.statistics.profile(userId)]);
+    return { user, ...profile };
   }
 
   @Post("avatar")

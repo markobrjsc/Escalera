@@ -19,6 +19,7 @@ import { TurnTimerService } from "./game/turn-timer.service.js";
 import { PresenceService } from "./realtime/presence.service.js";
 import { RedisService } from "./redis.service.js";
 import { LobbyLifecycleService } from "./lobbies/lobby-lifecycle.service.js";
+import { StatisticsService } from "./profiles/statistics.service.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 180 }])],
@@ -31,6 +32,7 @@ import { LobbyLifecycleService } from "./lobbies/lobby-lifecycle.service.js";
     AuthService,
     SessionGuard,
     ProfilesService,
+    StatisticsService,
     ObjectStorageService,
     LobbiesService,
     RealtimeGateway,
