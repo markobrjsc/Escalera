@@ -20,7 +20,7 @@ describe("autoritärer Spielzustand", () => {
     const state = createInitialGameState(["a", "b"], 1, () => 0);
     const view = toPlayerGameView(state, "a");
     expect(view.ownHand).toHaveLength(11);
-    expect(view.players).toEqual(expect.arrayContaining([{ userId: "b", handCount: 11, coins: 7 }]));
+    expect(view.players).toEqual(expect.arrayContaining([expect.objectContaining({ userId: "b", handCount: 11, coins: 7 })]));
     expect(JSON.stringify(view)).not.toContain('"hand"');
   });
 });

@@ -12,7 +12,22 @@ type Lobby = {
   players: Array<{ user: User; ready: boolean }>;
 };
 type Card = { id: string; kind: "joker" } | { id: string; kind: "standard"; rank: string; suit: string; deck: number };
-type Game = { version: number; state: { phase: number; activePlayerId: string; drawPileCount: number; discardTop: Card; players: Array<{ userId: string; handCount: number; coins: number }>; ownHand: Card[] } };
+type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: Card[]; sameSuit: boolean };
+type Game = {
+  version: number;
+  state: {
+    phase: number;
+    activePlayerId: string;
+    drawPileCount: number;
+    discardTop: Card | null;
+    discardOffer: { available: boolean; cardId: string } | null;
+    turn: { hasDrawn: boolean; canAct: boolean };
+    melds: GameMeld[];
+    roundEndedById: string | null;
+    players: Array<{ userId: string; handCount: number; coins: number; phaseLaid: boolean; totalPenalty: number }>;
+    ownHand: Card[];
+  };
+};
 
 async function api<T>(path: string, options: RequestInit = {}) {
   const response = await fetch(`${API_URL}${path}`, { credentials: "include", headers: { ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers }, ...options });
@@ -46,7 +61,7 @@ export function App() {
 
   if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
   if (!user) return <AccessView error={error} setError={setError} onAccess={setUser} />;
-  if (game && lobby?.status === "ACTIVE") return <GameView user={user} lobby={lobby} game={game} connected={connected} onLeave={leaveLobby} />;
+  if (game && lobby?.status === "ACTIVE") return <GameView user={user} lobby={lobby} game={game} connected={connected} onGame={setGame} onLeave={leaveLobby} />;
   if (lobby) return <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} />;
   return <LobbyListView user={user} connected={connected} error={error} setError={setError} onLobby={openLobby} onLogout={logout} />;
 }
@@ -79,11 +94,26 @@ function LobbyView({ user, lobby, connected, error, setError, onLeave }: { user:
   return <main className="portrait-view lobby-view"><Orientation portrait /><header className="lobby-header"><div><p className="overline">Lobby</p><h1 className="lobby-code">{lobby.code}</h1></div><div className="lobby-status">{isHost && <button className="button-quiet" onClick={() => setEditing(true)}>Einstellungen</button>}<Connection connected={connected} /></div></header><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span><span className="badge">Bestätigung {lobby.settings.confirmTurnEnd ? "an" : "aus"}</span></section><section className="surface members-panel"><div className="list-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className="member-list">{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"}`} key={player.user.id}><span className="profile-icon">{player.user.username[0].toUpperCase()}</span><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button className="button-danger" onClick={() => void onLeave()}>Verlassen</button><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
 }
 
-function GameView({ user, lobby, game, connected, onLeave }: { user: User; lobby: Lobby; game: Game; connected: boolean; onLeave: () => Promise<void> }) {
+function GameView({ user, lobby, game, connected, onGame, onLeave }: { user: User; lobby: Lobby; game: Game; connected: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void> }) {
   const [menu, setMenu] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
+  const [selected, setSelected] = useState<string[]>([]); const [busy, setBusy] = useState(false); const [actionError, setActionError] = useState("");
   const opponents = useMemo(() => game.state.players.filter((player) => player.userId !== user.id).map((player) => ({ ...player, name: lobby.players.find((entry) => entry.user.id === player.userId)?.user.username ?? "Spieler" })).sort((a, b) => Number(a.userId === game.state.activePlayerId) - Number(b.userId === game.state.activePlayerId)), [game, lobby, user]);
   const hand = useMemo(() => [...game.state.ownHand].sort((a, b) => cardSort(a, b, sort)), [game.state.ownHand, sort]);
-  return <main className="landscape-view game-view"><Orientation landscape /><header className="game-top"><button className="button-icon" aria-label="Spielmenü" onClick={() => setMenu(true)}>☰</button><div className="opponent-row">{opponents.map((player) => <article className={`opponent-card ${player.userId === game.state.activePlayerId ? "is-active" : ""}`} key={player.userId}><strong>{player.name}</strong><span>{player.handCount} Karten</span><span>{player.coins} Münzen · 0 P</span></article>)}</div><Connection connected={connected} /></header><section className="game-board"><article className="game-pile draw-pile"><span>Nachziehen</span><strong>{game.state.drawPileCount}</strong></article><div className="meld-zone"><div className="empty-meld">Meld-Zone</div></div><article className="game-pile discard-pile"><span>Ablage</span><strong>{cardLabel(game.state.discardTop)}</strong></article></section><section className="player-hand"><div className="turn-label">{game.state.activePlayerId === user.id ? "Dein Zug" : `Phase ${game.state.phase}`}</div><div className="hand-cards">{hand.map((card, index) => <article className={`playing-card ${isRed(card) ? "red-card" : ""}`} style={{ "--card-index": index } as React.CSSProperties} key={card.id}><strong>{cardLabel(card)}</strong></article>)}</div></section>{menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><button>Scoreboard</button><button onClick={() => setSort(sort === "rank" ? "suit" : "rank")}>Hand: {sort === "rank" ? "Wert" : "Zeichen"}</button><button>Meine Statistiken</button><button>Spielerprofile</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}</main>;
+  const self = game.state.players.find((player) => player.userId === user.id)!;
+  const canPlay = game.state.turn.canAct && game.state.turn.hasDrawn && !busy;
+  const act = async (path: string, body?: object) => {
+    setBusy(true); setActionError("");
+    try {
+      const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) });
+      onGame(result); setSelected([]);
+    } catch (reason) { setActionError(message(reason)); } finally { setBusy(false); }
+  };
+  const toggleCard = (cardId: string) => setSelected((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
+  const submitPhase = () => {
+    try { void act("phase", { combinations: phaseCombinations(hand.filter((card) => selected.includes(card.id)), game.state.phase) }); }
+    catch (reason) { setActionError(message(reason)); }
+  };
+  return <main className="landscape-view game-view"><Orientation landscape /><header className="game-top"><button className="button-icon" aria-label="Spielmenü" onClick={() => setMenu(true)}>☰</button><div className="opponent-row">{opponents.map((player) => <article className={`opponent-card ${player.userId === game.state.activePlayerId ? "is-active" : ""}`} key={player.userId}><strong>{player.name}</strong><span>{player.handCount} Karten</span><span>{player.coins} Münzen · {player.totalPenalty} P</span></article>)}</div><Connection connected={connected} /></header><section className="game-board"><button className="game-pile draw-pile" disabled={!game.state.turn.canAct || game.state.turn.hasDrawn || busy} onClick={() => void act("draw", { source: "draw" })}><span>Nachziehen</span><strong>{game.state.drawPileCount}</strong></button><div className="meld-zone">{game.state.melds.length ? game.state.melds.map((meld) => <article className="meld-card" key={meld.id}><div><strong>{meld.type === "group" ? "Gruppe" : "Straße"}</strong><span>{meld.cards.map(cardLabel).join(" · ")}</span></div><button disabled={!canPlay || !self.phaseLaid || selected.length !== 1} onClick={() => void act(`melds/${meld.id}/cards`, { cardId: selected[0] })}>Anlegen</button></article>) : <div className="empty-meld">Meld-Zone</div>}</div><div className="discard-area"><button className="game-pile discard-pile" disabled={!game.state.discardTop || !game.state.turn.canAct || game.state.turn.hasDrawn || busy} onClick={() => void act("draw", { source: "discard" })}><span>Ablage</span><strong>{game.state.discardTop ? cardLabel(game.state.discardTop) : "Leer"}</strong></button>{game.state.discardOffer && <button className="buy-button" disabled={busy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}</div></section><section className="player-hand"><div className="hand-toolbar"><div className="turn-label">{game.state.roundEndedById ? "Runde beendet" : game.state.activePlayerId === user.id ? "Dein Zug" : `Phase ${game.state.phase}`}</div><div className="turn-actions">{!self.phaseLaid ? <button disabled={!canPlay || selected.length < 3} onClick={submitPhase}>Phase auslegen</button> : <button disabled={!canPlay || selected.length < 3} onClick={() => void act("melds", { cardIds: selected })}>Kombi auslegen</button>}<button className="button-primary" disabled={!canPlay || selected.length !== 1} onClick={() => void act("discard", { cardId: selected[0] })}>Abwerfen</button></div>{actionError && <span className="game-error" role="alert">{actionError}</span>}</div><div className="hand-cards">{hand.map((card, index) => <button type="button" aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${isRed(card) ? "red-card" : ""} ${selected.includes(card.id) ? "is-selected" : ""}`} style={{ "--card-index": index } as React.CSSProperties} key={card.id}><strong>{cardLabel(card)}</strong></button>)}</div></section>{menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><button>Scoreboard</button><button onClick={() => setSort(sort === "rank" ? "suit" : "rank")}>Hand: {sort === "rank" ? "Wert" : "Zeichen"}</button><button>Meine Statistiken</button><button>Spielerprofile</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}</main>;
 }
 
 function Orientation({ portrait, landscape }: { portrait?: boolean; landscape?: boolean }) { return <div className="orientation-notice"><div><div className="rotate-icon">↻</div><h2>Gerät drehen</h2><p className="muted">Diese Ansicht ist für {portrait ? "Hochformat" : landscape ? "Querformat" : "eine andere Ausrichtung"} gestaltet.</p></div></div>; }
@@ -92,4 +122,18 @@ function suitSymbol(suit: string) { return ({ clubs: "♣", diamonds: "♦", hea
 function cardLabel(card: Card) { return card.kind === "joker" ? "Joker" : `${card.rank} ${suitSymbol(card.suit)}`; }
 function isRed(card: Card) { return card.kind === "standard" && (card.suit === "hearts" || card.suit === "diamonds"); }
 function cardSort(a: Card, b: Card, mode: "rank" | "suit") { const rank = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]; const av = a.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(a.rank) : a.suit.localeCompare(b.kind === "standard" ? b.suit : "zz"); const bv = b.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(b.rank) : 0; return typeof av === "number" && typeof bv === "number" ? av - bv : 0; }
+function phaseCombinations(cards: Card[], phase: number) {
+  if (phase === 7) return [cards.map((card) => card.id)];
+  const requiredGroups = [2, 4, 6].includes(phase) ? 2 : 1;
+  const groups = new Map<string, Card[]>(); const jokers = cards.filter((card) => card.kind === "joker");
+  for (const card of cards) if (card.kind === "standard") groups.set(card.rank, [...(groups.get(card.rank) ?? []), card]);
+  const combinations = [...groups.values()].sort((a, b) => b.length - a.length);
+  if (combinations.length !== requiredGroups) throw new Error(`Wähle genau ${requiredGroups} Gruppe${requiredGroups === 1 ? "" : "n"} gleicher Werte.`);
+  for (const joker of jokers) {
+    const target = combinations.filter((combination) => !combination.some((card) => card.kind === "joker")).sort((a, b) => a.length - b.length)[0];
+    if (!target) throw new Error("Pro Kombination ist nur ein Joker erlaubt.");
+    target.push(joker);
+  }
+  return combinations.map((combination) => combination.map((card) => card.id));
+}
 function message(reason: unknown) { return reason instanceof Error ? reason.message : "Aktion konnte nicht ausgeführt werden."; }

@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run build --workspace=@escalera/game-rules",
     "dev": "tsx watch src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
+    "pretest": "npm run build --workspace=@escalera/game-rules",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
+    "@escalera/game-rules": "*",
     "@aws-sdk/client-s3": "^3.900.0",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
