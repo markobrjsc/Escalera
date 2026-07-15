@@ -24,6 +24,20 @@ export class LobbiesService {
     });
   }
 
+  async listOpen(search?: string) {
+    const query = search?.trim();
+    const lobbies = await this.prisma.lobby.findMany({
+      where: {
+        status: "OPEN",
+        ...(query ? { OR: [{ code: { contains: query.toUpperCase() } }, { host: { username: { contains: query, mode: "insensitive" } } }] } : {})
+      },
+      include: lobbyInclude,
+      orderBy: { createdAt: "desc" },
+      take: 30
+    });
+    return lobbies.map((lobby) => this.publicLobby(lobby));
+  }
+
   async join(userId: string, code: string) {
     const lobby = await this.getLobby(code);
     if (lobby.status !== "OPEN") throw new BadRequestException("Diese Lobby ist nicht mehr offen.");
@@ -41,7 +55,36 @@ export class LobbiesService {
     const player = lobby.players.find((entry) => entry.userId === userId);
     if (!player) throw new ForbiddenException("Du bist nicht Mitglied dieser Lobby.");
     await this.prisma.lobbyPlayer.update({ where: { id: player.id }, data: { ready } });
-    return this.getLobby(code);
+    const updatedLobby = await this.getLobby(code);
+    if (ready && updatedLobby.status === "OPEN" && updatedLobby.players.length >= 2 && updatedLobby.players.every((entry) => entry.ready)) {
+      await this.createGame(updatedLobby);
+      return this.getLobby(code);
+    }
+    return updatedLobby;
+  }
+
+  async updateSettings(userId: string, code: string, input: CreateLobbyDto) {
+    const lobby = await this.getLobby(code);
+    if (lobby.hostId !== userId) throw new ForbiddenException("Nur der Gastgeber kann Einstellungen ändern.");
+    if (lobby.status !== "OPEN") throw new BadRequestException("Die Partie wurde bereits gestartet.");
+    if (input.maxPlayers < lobby.players.length) throw new BadRequestException("Das Spielerlimit ist kleiner als die aktuelle Spielerzahl.");
+    return this.prisma.lobby.update({ where: { id: lobby.id }, data: input, include: lobbyInclude });
+  }
+
+  async leave(userId: string, code: string) {
+    const lobby = await this.getLobby(code);
+    const player = lobby.players.find((entry) => entry.userId === userId);
+    if (!player) throw new ForbiddenException("Du bist nicht Mitglied dieser Lobby.");
+    const remaining = lobby.players.filter((entry) => entry.userId !== userId);
+    if (remaining.length === 0) {
+      await this.prisma.lobby.delete({ where: { id: lobby.id } });
+      return { deleted: true as const, code: lobby.code };
+    }
+    await this.prisma.$transaction([
+      this.prisma.lobbyPlayer.delete({ where: { id: player.id } }),
+      ...(lobby.hostId === userId ? [this.prisma.lobby.update({ where: { id: lobby.id }, data: { hostId: remaining[0].userId } })] : [])
+    ]);
+    return { deleted: false as const, code: lobby.code, lobby: await this.getLobby(lobby.code) };
   }
 
   async start(userId: string, code: string) {
@@ -51,13 +94,17 @@ export class LobbiesService {
     if (lobby.players.length < 2) throw new BadRequestException("Mindestens zwei Spieler werden benötigt.");
     if (!lobby.players.every((player) => player.ready)) throw new BadRequestException("Alle Spieler müssen bereit sein.");
 
+    await this.createGame(lobby);
+    return this.getLobby(code);
+  }
+
+  private async createGame(lobby: Awaited<ReturnType<LobbiesService["getLobby"]>>) {
     const state = createInitialGameState(lobby.players.map((player) => player.userId), lobby.jokersPerPlayer);
     await this.prisma.$transaction(async (transaction) => {
       const updated = await transaction.lobby.updateMany({ where: { id: lobby.id, status: "OPEN" }, data: { status: "ACTIVE" } });
-      if (updated.count !== 1) throw new BadRequestException("Diese Lobby wurde bereits gestartet.");
+      if (updated.count !== 1) return;
       await transaction.game.create({ data: { lobbyId: lobby.id, state: state as unknown as Prisma.InputJsonValue } });
     });
-    return this.getLobby(code);
   }
 
   async getView(userId: string, code: string) {
@@ -93,7 +140,8 @@ export class LobbiesService {
         maxPlayers: lobby.maxPlayers,
         jokersPerPlayer: lobby.jokersPerPlayer,
         maxTurnSeconds: lobby.maxTurnSeconds,
-        streetsRequireSameSuit: lobby.streetsRequireSameSuit
+        streetsRequireSameSuit: lobby.streetsRequireSameSuit,
+        confirmTurnEnd: lobby.confirmTurnEnd
       },
       players: lobby.players.map((player) => ({ user: player.user, ready: player.ready }))
     };

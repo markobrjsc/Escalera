@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AuthenticatedRequest, SessionGuard } from "../auth/session.guard.js";
 import { CreateLobbyDto } from "./lobby.dto.js";
 import { LobbiesService } from "./lobbies.service.js";
@@ -17,6 +17,11 @@ export class LobbiesController {
     const lobby = await this.lobbies.create(request.user.id, input);
     await this.realtime.publishLobby(lobby.code);
     return lobby;
+  }
+
+  @Get()
+  list(@Query("search") search?: string) {
+    return this.lobbies.listOpen(search);
   }
 
   @Post(":code/join")
@@ -38,6 +43,20 @@ export class LobbiesController {
     const lobby = await this.lobbies.setReady(request.user.id, code, false);
     await this.realtime.publishLobby(lobby.code);
     return lobby;
+  }
+
+  @Post(":code/settings")
+  async settings(@Req() request: AuthenticatedRequest, @Param("code") code: string, @Body() input: CreateLobbyDto) {
+    const lobby = await this.lobbies.updateSettings(request.user.id, code, input);
+    await this.realtime.publishLobby(lobby.code);
+    return lobby;
+  }
+
+  @Post(":code/leave")
+  async leave(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
+    const result = await this.lobbies.leave(request.user.id, code);
+    if (!result.deleted) await this.realtime.publishLobby(result.code);
+    return { deleted: result.deleted };
   }
 
   @Post(":code/start")

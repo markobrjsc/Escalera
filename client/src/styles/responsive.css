@@ -1,0 +1,56 @@
+:root {
+  --scale: clamp(.82, calc(100vw / 390), 1.18);
+  --space-1: clamp(.25rem, 1.1vmin, .5rem);
+  --space-2: clamp(.5rem, 1.8vmin, .85rem);
+  --space-3: clamp(.75rem, 2.5vmin, 1.25rem);
+  --space-4: clamp(1rem, 3.5vmin, 1.75rem);
+  --control-height: clamp(2.75rem, 7.5vmin, 3.25rem);
+  --page-inline: max(clamp(.75rem, 4vw, 1.5rem), env(safe-area-inset-left), env(safe-area-inset-right));
+  --page-top: max(clamp(.75rem, 3dvh, 1.5rem), env(safe-area-inset-top));
+  --page-bottom: max(clamp(.75rem, 3dvh, 1.5rem), env(safe-area-inset-bottom));
+}
+
+html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100dvh; overflow: hidden; }
+* { box-sizing: border-box; }
+
+.portrait-view,
+.landscape-view {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.portrait-view {
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
+}
+
+.landscape-view {
+  padding: max(.5rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.5rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left));
+}
+
+.orientation-notice { display: none; }
+
+@media (orientation: landscape) {
+  .portrait-view > :not(.orientation-notice) { visibility: hidden; }
+  .portrait-view .orientation-notice { display: grid; }
+}
+
+@media (orientation: portrait) {
+  .landscape-view > :not(.orientation-notice) { visibility: hidden; }
+  .landscape-view .orientation-notice { display: grid; }
+}
+
+.orientation-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  place-items: center;
+  padding: 2rem;
+  background: var(--color-onyx, #0d0d0d);
+  text-align: center;
+}
+
+@media (max-width: 349px), (max-height: 349px) {
+  :root { --control-height: 2.75rem; }
+}

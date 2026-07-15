@@ -10,6 +10,10 @@
 - Die Anwendung ist für Touch-Bedienung auf iOS und Android ausgelegt.
 - Im installierten Modus sind keine Browser-Adress- oder Navigationsleisten sichtbar.
 - Systembedingte sichere Bildschirmränder dürfen keine Karten oder Aktionen verdecken.
+- Login/Register, Lobbyliste und Lobbyansicht werden im Hochformat gestaltet.
+- Der Spieltisch wird ausschließlich im Querformat gestaltet.
+
+Die verbindlichen Details stehen in [Responsive-Frontend.md](Responsive-Frontend.md), [Design-System.md](Design-System.md) und [View-Specifications.md](View-Specifications.md).
 
 ## Installation
 

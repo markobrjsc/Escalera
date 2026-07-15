@@ -1,0 +1,46 @@
+.centered, .login-view { display: grid; place-items: center; }
+.login-card { display: grid; width: min(90vw, 31rem); max-height: 70dvh; gap: clamp(1rem, 4dvh, 2.25rem); padding: clamp(1.25rem, 5vmin, 2.5rem); }
+.login-card form { display: grid; gap: var(--space-3); }
+.brand-suit { font-size: clamp(1.5rem, 7vmin, 2.5rem); line-height: 1; }
+.login-note { margin: 0; font-size: var(--font-xs); line-height: 1.45; text-align: center; }
+
+.app-header { display: grid; height: clamp(3.5rem, 10dvh, 5rem); grid-template-columns: 1fr auto 1fr; align-items: center; border-bottom: var(--border); }
+.app-header > :first-child { justify-self: start; }.app-header .brand { align-self: center; }.brand-small { font-size: clamp(1.55rem, 7vw, 2.6rem); }
+.app-header .profile-icon { justify-self: end; }
+.profile-icon { display: grid; width: clamp(2.25rem, 7vmin, 3rem); aspect-ratio: 1; place-items: center; border: var(--border); border-radius: 50%; font-weight: 900; text-transform: uppercase; }
+.lobby-list-content { display: grid; height: calc(100% - clamp(3.5rem, 10dvh, 5rem)); grid-template-rows: auto auto auto minmax(0, 1fr); gap: var(--space-2); padding-top: var(--space-3); }
+.welcome-row { position: relative; display: grid; min-height: 2.2rem; place-items: center; padding-inline: 4.5rem; }.welcome-row .connection { position: absolute; right: 0; bottom: .2rem; }
+.welcome { max-width: 100%; margin: 0; overflow: hidden; font-size: clamp(.9rem, 4.4vw, 1.35rem); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.lobby-tools { display: grid; grid-template-columns: minmax(0, 40%) var(--control-height) 1fr auto; gap: var(--space-1); }.lobby-tools .create-button { grid-column: 4; }
+.lobby-browser { display: grid; min-height: 0; grid-template-rows: auto minmax(0, 1fr); padding: var(--space-2); }
+.list-title, .dialog-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }.list-title h2, .list-title h3, .dialog-title h2 { margin: 0; }
+.lobby-browser > .list-title { position: relative; justify-content: center; min-height: 2.7rem; }.lobby-browser > .list-title h3 { font-size: var(--font-lg); }.lobby-browser > .list-title .badge { position: absolute; right: 0; }
+.lobby-scroll { display: grid; min-height: 0; align-content: start; gap: var(--space-2); overflow-y: auto; padding: var(--space-2) .15rem .15rem; scrollbar-color: var(--color-teal) var(--color-onyx); }
+.lobby-card { display: grid; min-height: clamp(5.5rem, 14dvh, 7rem); grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2); background: var(--color-onyx); }
+.lobby-card-info { display: grid; gap: .45rem; }.lobby-card-info > strong { font-size: var(--font-lg); }.lobby-meta { display: flex; flex-wrap: wrap; gap: .35rem; }.lobby-pill { display: inline-flex; align-items: center; border: 1px solid var(--color-muted); border-radius: 999px; padding: .2rem .55rem; color: var(--color-muted); font-size: var(--font-xs); }.join-button { background: var(--color-teal); }.join-button:hover, .join-button:focus-visible { background: var(--color-teal); border-color: var(--color-white); }
+.empty-state { display: grid; min-height: 12rem; place-content: center; gap: .5rem; text-align: center; }
+.settings-form { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-3); }.settings-form > button { grid-column: 1 / -1; }.toggle { display: flex; min-height: var(--control-height); align-items: center; gap: .65rem; border: var(--border); padding: .5rem .7rem; }.toggle input { width: 1.2rem; min-height: auto; accent-color: var(--color-teal); }
+
+.lobby-view { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; gap: var(--space-2); }
+.lobby-header { display: flex; align-items: start; justify-content: space-between; }.lobby-code { margin: .1rem 0 0; font-size: clamp(2rem, 10vw, 3.5rem); }
+.lobby-status { display: grid; justify-items: end; gap: .25rem; }
+.setting-badges { display: flex; gap: .35rem; overflow-x: auto; padding-bottom: .15rem; }.setting-badges .badge { flex: 0 0 auto; color: var(--color-muted); }
+.members-panel { min-height: 0; align-self: start; padding: var(--space-2); overflow: hidden; }.member-list { display: grid; max-height: 48dvh; gap: var(--space-1); overflow-y: auto; padding-top: var(--space-2); }
+.member-card { display: grid; min-height: clamp(3.3rem, 9dvh, 4.25rem); grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); border: 2px solid currentColor; padding: .45rem .65rem; background: var(--color-jet); }.member-card > div { display: grid; }.member-card > div span { color: var(--color-muted); font-size: var(--font-xs); }.member-card.is-ready { color: var(--color-ready); }.member-card.is-waiting { color: var(--color-waiting); }.member-card strong { color: var(--color-white); }.member-state { font-size: var(--font-xs); font-weight: 900; }
+.lobby-actions { display: grid; width: min(100%, 30rem); grid-template-columns: repeat(2, minmax(0, 1fr)); justify-self: center; gap: clamp(1rem, 6vw, 2.5rem); }
+
+.game-view { position: relative; display: grid; grid-template-rows: minmax(3.5rem, 20dvh) minmax(0, 1fr) minmax(5rem, 29dvh); gap: .35rem; }
+.game-top { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-2); }
+.opponent-row { display: flex; min-width: 0; height: 100%; align-items: start; justify-content: flex-end; gap: var(--space-1); overflow-x: auto; }
+.opponent-card { display: grid; flex: 0 1 clamp(6.5rem, 14vw, 10rem); min-width: 6.5rem; height: 74%; align-content: center; border: 1px solid var(--color-white); padding: .35rem .55rem; background: var(--color-jet); font-size: var(--font-xs); }.opponent-card span { color: var(--color-muted); }.opponent-card.is-active { flex-basis: clamp(8rem, 18vw, 12rem); height: 100%; border: 3px solid var(--color-teal); color: var(--color-white); }
+.game-board { display: grid; min-height: 0; grid-template-columns: clamp(4.2rem, 10vw, 7rem) minmax(0, 1fr) clamp(4.2rem, 10vw, 7rem); align-items: center; gap: var(--space-2); }
+.game-pile { display: grid; width: 100%; aspect-ratio: .72; place-content: center; border: var(--border); padding: .3rem; background: var(--color-jet); text-align: center; font-size: var(--font-xs); }.game-pile strong { font-size: var(--font-md); }.discard-pile { background: var(--color-white); color: var(--color-onyx); }
+.meld-zone { display: grid; height: 100%; grid-template-columns: repeat(2, minmax(6rem, 1fr)); gap: var(--space-1); overflow: auto; border: 1px dashed var(--color-teal); padding: var(--space-1); }.empty-meld { grid-column: 1 / -1; place-self: center; color: var(--color-muted); font-size: var(--font-sm); text-transform: uppercase; }
+.player-hand { position: relative; min-height: 0; overflow: visible; text-align: center; }.turn-label { position: relative; z-index: 3; display: inline-block; border: 1px solid var(--color-teal); padding: .15rem .55rem; background: var(--color-onyx); font-size: var(--font-xs); font-weight: 900; text-transform: uppercase; }
+.hand-cards { position: absolute; inset: 1.5rem 5% auto; display: flex; width: 90%; justify-content: center; overflow: visible; perspective: 50rem; }
+.playing-card { flex: 0 0 clamp(3.2rem, 7.7vw, 5.4rem); height: clamp(5rem, 20dvh, 8rem); margin-left: clamp(-1.35rem, -2vw, -.6rem); transform: translateY(.3rem) rotate(calc((var(--card-index) - 5) * 1.2deg)); transform-origin: 50% 110%; border: 2px solid var(--color-onyx); border-radius: var(--radius-sm); padding: .35rem; background: var(--color-white); color: var(--color-onyx); text-align: left; font-size: var(--font-xs); }.playing-card:first-child { margin-left: 0; }.red-card { color: #a51f35; }
+.game-menu { position: fixed; inset: 0 auto 0 0; z-index: 60; display: grid; width: min(78vw, 22rem); grid-template-rows: auto repeat(4, auto) 1fr auto; gap: var(--space-2); padding: var(--space-3); }.leave-game { align-self: end; }
+.rotate-icon { font-size: 4rem; }
+
+@media (max-height: 600px) and (orientation: portrait) { .login-card { gap: .7rem; padding: 1rem; }.login-card .brand { font-size: 2rem; }.login-note { font-size: .68rem; }.lobby-list-content { gap: .4rem; }.lobby-card { min-height: 4.8rem; }.member-card { min-height: 3rem; } }
+@media (max-width: 390px) { .create-button { padding-inline: .55rem; }.settings-form { grid-template-columns: 1fr; }.settings-form > button { grid-column: 1; } }
