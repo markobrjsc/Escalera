@@ -57,6 +57,7 @@ export function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [lobbyRevision, setLobbyRevision] = useState(0);
 
   useEffect(() => {
     api<{ user: User }>("/auth/me").then(async (result) => {
@@ -72,6 +73,7 @@ export function App() {
     const live = io(`${SOCKET_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
     live.on("realtime:connected", () => { setConnected(true); setSocket(live); }); live.on("disconnect", () => { setConnected(false); setSocket(null); });
     live.on("lobby:update", (value: Lobby) => setLobby(value)); live.on("game:update", (value: Game) => setGame(value));
+    live.on("lobbies:update", () => setLobbyRevision((value) => value + 1));
     live.on("lobby:deleted", () => { setLobby(null); setGame(null); setError("Die Lobby wurde wegen Inaktivität geschlossen."); });
     return () => { live.disconnect(); setSocket(null); setConnected(false); };
   }, [user]);

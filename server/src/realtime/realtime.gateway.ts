@@ -25,7 +25,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly presence: PresenceService,
     private readonly lifecycle: LobbyLifecycleService
   ) {
-    this.lifecycle.onDeleted((code) => this.server?.to(this.room(code)).emit("lobby:deleted", { code, reason: "expired" }));
+    this.lifecycle.onDeleted((code) => {
+      this.server?.to(this.room(code)).emit("lobby:deleted", { code, reason: "expired" });
+      this.publishLobbyList();
+    });
   }
 
   async handleConnection(client: RealtimeSocket) {
@@ -33,6 +36,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const user = await this.auth.getSessionUser(token);
     if (!user) return client.disconnect(true);
     client.data.userId = user.id;
+    client.join(this.authenticatedRoom());
     client.emit("realtime:connected", { user });
   }
 
@@ -67,6 +71,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.to(this.room(code)).emit("lobby:update", update.lobby);
     await Promise.all(update.playerIds.map((userId) => this.emitGameToPlayer(code, userId)));
     await this.lifecycle.refresh(code);
+    this.publishLobbyList();
+  }
+
+  publishLobbyList() {
+    this.server?.to(this.authenticatedRoom()).emit("lobbies:update", { changedAt: new Date().toISOString() });
   }
 
   private async emitGameToPlayer(code: string, userId: string) {
@@ -95,6 +104,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private room(code: string) {
     return `lobby:${code}`;
+  }
+
+  private authenticatedRoom() {
+    return "authenticated";
   }
 
   private playerRoom(code: string, userId: string) {
