@@ -37,6 +37,7 @@ enum GameStatus {
 model Lobby {
   id                     String       @id @default(cuid())
   code                   String       @unique
+  name                   String       @default("Neue Lobby")
   hostId                 String
   status                 LobbyStatus  @default(OPEN)
   maxPlayers             Int          @default(6)
