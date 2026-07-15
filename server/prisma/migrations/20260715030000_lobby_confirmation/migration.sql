@@ -1,0 +1,1 @@
+ALTER TABLE "Lobby" ADD COLUMN "confirmTurnEnd" BOOLEAN NOT NULL DEFAULT true;

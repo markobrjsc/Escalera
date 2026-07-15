@@ -8,46 +8,16 @@ type Lobby = {
   code: string;
   status: "OPEN" | "ACTIVE" | "CLOSED";
   host: Pick<User, "id" | "username">;
-  settings: { maxPlayers: number; jokersPerPlayer: number; maxTurnSeconds: number; streetsRequireSameSuit: boolean };
+  settings: { maxPlayers: number; jokersPerPlayer: number; maxTurnSeconds: number | null; streetsRequireSameSuit: boolean; confirmTurnEnd: boolean };
   players: Array<{ user: User; ready: boolean }>;
 };
 type Card = { id: string; kind: "joker" } | { id: string; kind: "standard"; rank: string; suit: string; deck: number };
-type Game = {
-  version: number;
-  state: {
-    phase: number;
-    activePlayerId: string;
-    drawPileCount: number;
-    discardTop: Card;
-    players: Array<{ userId: string; handCount: number; coins: number }>;
-    ownHand: Card[];
-  };
-};
+type Game = { version: number; state: { phase: number; activePlayerId: string; drawPileCount: number; discardTop: Card; players: Array<{ userId: string; handCount: number; coins: number }>; ownHand: Card[] } };
 
 async function api<T>(path: string, options: RequestInit = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    credentials: "include",
-    headers: { ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers },
-    ...options
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? "Etwas ist schiefgelaufen.");
-  }
+  const response = await fetch(`${API_URL}${path}`, { credentials: "include", headers: { ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers }, ...options });
+  if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.message ?? "Etwas ist schiefgelaufen."); }
   return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
-}
-
-function cardLabel(card: Card) {
-  return card.kind === "joker" ? "Joker" : `${card.rank} ${suitSymbol(card.suit)}`;
-}
-
-function suitSymbol(suit: string) {
-  return ({ clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠" } as Record<string, string>)[suit] ?? "?";
-}
-
-function runsAsInstalledApp() {
-  const mobileNavigator = navigator as Navigator & { standalone?: boolean };
-  return window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches || mobileNavigator.standalone === true;
 }
 
 export function App() {
@@ -59,90 +29,67 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
 
-  useEffect(() => {
-    api<{ user: User }>("/auth/me").then(({ user: currentUser }) => setUser(currentUser)).catch(() => undefined).finally(() => setLoading(false));
-  }, []);
-
+  useEffect(() => { api<{ user: User }>("/auth/me").then((result) => setUser(result.user)).catch(() => undefined).finally(() => setLoading(false)); }, []);
   useEffect(() => {
     if (!user) return;
-    const nextSocket = io(`${API_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
-    nextSocket.on("connect", () => setConnected(true));
-    nextSocket.on("disconnect", () => setConnected(false));
-    nextSocket.on("lobby:update", (update: Lobby) => setLobby(update));
-    nextSocket.on("game:update", (update: Game) => setGame(update));
-    setSocket(nextSocket);
-    return () => {
-      nextSocket.disconnect();
-      setSocket(null);
-      setConnected(false);
-    };
+    const live = io(`${API_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
+    live.on("connect", () => setConnected(true)); live.on("disconnect", () => setConnected(false));
+    live.on("lobby:update", (value: Lobby) => setLobby(value)); live.on("game:update", (value: Game) => setGame(value));
+    setSocket(live);
+    return () => { live.disconnect(); setSocket(null); setConnected(false); };
   }, [user]);
+  useEffect(() => { if (!socket || !lobby?.code) return; socket.emit("lobby:watch", { code: lobby.code }); return () => { socket.emit("lobby:unwatch", { code: lobby.code }); }; }, [socket, lobby?.code]);
 
-  useEffect(() => {
-    if (!socket || !lobby?.code) return;
-    socket.emit("lobby:watch", { code: lobby.code });
-    return () => { socket.emit("lobby:unwatch", { code: lobby.code }); };
-  }, [socket, lobby?.code]);
+  const openLobby = async (code: string) => { const value = await api<Lobby>(`/lobbies/${code}`); setLobby(value); if (value.status === "ACTIVE") setGame(await api<Game>(`/lobbies/${code}/game`)); };
+  const leaveLobby = async () => { if (!lobby) return; await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" }); setLobby(null); setGame(null); };
+  const logout = async () => { await api("/auth/logout", { method: "POST", body: "{}" }); setUser(null); setLobby(null); setGame(null); };
 
-  const selfPlayer = useMemo(() => lobby?.players.find((player) => player.user.id === user?.id), [lobby, user]);
-
-  const openLobby = async (code: string) => {
-    const nextLobby = await api<Lobby>(`/lobbies/${code}`);
-    setLobby(nextLobby);
-    if (nextLobby.status === "ACTIVE") setGame(await api<Game>(`/lobbies/${code}/game`));
-  };
-
-  const updateReady = async () => {
-    if (!lobby || !selfPlayer) return;
-    setError("");
-    try {
-      await api(`/lobbies/${lobby.code}/${selfPlayer.ready ? "not-ready" : "ready"}`, { method: "POST", body: "{}" });
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Bereit-Status konnte nicht geändert werden."); }
-  };
-
-  const startGame = async () => {
-    if (!lobby) return;
-    setError("");
-    try { await api(`/lobbies/${lobby.code}/start`, { method: "POST", body: "{}" }); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Partie konnte nicht gestartet werden."); }
-  };
-
-  if (loading) return <main className="app-shell"><p>Escalera wird vorbereitet …</p></main>;
-  if (!user) return <AccessScreen onAccess={setUser} onError={setError} error={error} />;
-  if (game && lobby?.status === "ACTIVE") return <GameTable user={user} lobby={lobby} game={game} connected={connected} onLeave={() => { setLobby(null); setGame(null); }} />;
-  if (lobby) return <LobbyScreen user={user} lobby={lobby} connected={connected} error={error} onReady={updateReady} onStart={startGame} onLeave={() => setLobby(null)} />;
-  return <HomeScreen user={user} connected={connected} onLobby={openLobby} onUser={setUser} onError={setError} error={error} />;
+  if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
+  if (!user) return <AccessView error={error} setError={setError} onAccess={setUser} />;
+  if (game && lobby?.status === "ACTIVE") return <GameView user={user} lobby={lobby} game={game} connected={connected} onLeave={leaveLobby} />;
+  if (lobby) return <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} />;
+  return <LobbyListView user={user} connected={connected} error={error} setError={setError} onLobby={openLobby} onLogout={logout} />;
 }
 
-function AccessScreen({ onAccess, onError, error }: { onAccess: (user: User) => void; onError: (error: string) => void; error: string }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); onError("");
-    try { onAccess((await api<{ user: User }>("/auth/access", { method: "POST", body: JSON.stringify({ username, password }) })).user); }
-    catch (reason) { onError(reason instanceof Error ? reason.message : "Anmeldung nicht möglich."); }
-    finally { setBusy(false); }
-  };
-  return <main className="app-shell"><section className="panel access-panel"><p className="eyebrow">Escalera</p><h1>Gemeinsam spielen.</h1><p className="lead">Name neu? Dann wird dein Konto direkt erstellt.</p><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={24} required autoComplete="username" /></label><label>Passwort<input value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} required type="password" autoComplete="current-password" /></label>{error && <p className="error" role="alert">{error}</p>}<button disabled={busy}>{busy ? "Bitte warten …" : "Anmelden oder registrieren"}</button></form><p className="hint">Passwörter können ohne E-Mail-Adresse nicht zurückgesetzt werden.</p></section></main>;
+function AccessView({ error, setError, onAccess }: { error: string; setError: (value: string) => void; onAccess: (user: User) => void }) {
+  const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [busy, setBusy] = useState(false);
+  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(""); try { onAccess((await api<{ user: User }>("/auth/access", { method: "POST", body: JSON.stringify({ username, password }) })).user); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
+  return <main className="portrait-view login-view"><Orientation portrait /><section className="surface login-card"><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} type="password" autoComplete="current-password" required /></label>{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : "Anmelden / Registrieren"}</button></form><p className="login-note muted">Ist dein Name noch frei, wird er mit diesem Passwort registriert. Ohne das Passwort kann der Name nicht wiederhergestellt werden.</p></section></main>;
 }
 
-function HomeScreen({ user, connected, onLobby, onUser, onError, error }: { user: User; connected: boolean; onLobby: (code: string) => Promise<void>; onUser: (user: User) => void; onError: (error: string) => void; error: string }) {
-  const [code, setCode] = useState(""); const [creating, setCreating] = useState(false); const [joining, setJoining] = useState(false);
-  const create = async () => { setCreating(true); onError(""); try { const lobby = await api<Lobby>("/lobbies", { method: "POST", body: JSON.stringify({ maxPlayers: 4, jokersPerPlayer: 1, maxTurnSeconds: 60, streetsRequireSameSuit: true }) }); await onLobby(lobby.code); } catch (reason) { onError(reason instanceof Error ? reason.message : "Lobby konnte nicht erstellt werden."); } finally { setCreating(false); } };
-  const join = async (event: FormEvent) => { event.preventDefault(); setJoining(true); onError(""); try { await api(`/lobbies/${code.toUpperCase()}/join`, { method: "POST", body: "{}" }); await onLobby(code.toUpperCase()); } catch (reason) { onError(reason instanceof Error ? reason.message : "Lobby konnte nicht betreten werden."); } finally { setJoining(false); } };
-  const uploadAvatar = async (event: FormEvent<HTMLInputElement>) => { const file = event.currentTarget.files?.[0]; if (!file) return; onError(""); const form = new FormData(); form.append("file", file); try { const response = await fetch(`${API_URL}/profile/avatar`, { method: "POST", credentials: "include", body: form }); const data = await response.json(); if (!response.ok) throw new Error(data.message); onUser(data.user); } catch (reason) { onError(reason instanceof Error ? reason.message : "Profilbild konnte nicht gespeichert werden."); } };
-  return <main className="app-shell"><section className="home"><header className="topbar"><div><p className="eyebrow">Escalera</p><h1>Hallo, {user.username}</h1></div><Connection connected={connected} /></header><div className="grid"><article className="panel"><h2>Neue Lobby</h2><p>Bis zu vier Spieler, ein Joker pro Spieler und 60 Sekunden pro Zug.</p><button onClick={create} disabled={creating}>{creating ? "Lobby wird erstellt …" : "Lobby erstellen"}</button></article><article className="panel"><h2>Lobby beitreten</h2><form onSubmit={join}><label>Lobby-Code<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="A1B2C3" maxLength={6} required /></label><button disabled={joining}>{joining ? "Beitreten …" : "Beitreten"}</button></form></article><article className="panel profile"><h2>Profil</h2><div className="avatar">{user.username.slice(0, 1).toUpperCase()}</div><label className="upload">Profilbild ändern<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} /></label></article></div>{error && <p className="error" role="alert">{error}</p>}<p className="hint">{runsAsInstalledApp() ? "Vollbildmodus aktiv." : "Für ein Vollbilderlebnis: Escalera zum Home-Bildschirm hinzufügen."}</p></section></main>;
+function LobbyListView({ user, connected, error, setError, onLobby, onLogout }: { user: User; connected: boolean; error: string; setError: (value: string) => void; onLobby: (code: string) => Promise<void>; onLogout: () => Promise<void> }) {
+  const [lobbies, setLobbies] = useState<Lobby[]>([]); const [search, setSearch] = useState(""); const [dialog, setDialog] = useState(false); const [busy, setBusy] = useState(false);
+  const refresh = async (query = search) => { try { setLobbies(await api<Lobby[]>(`/lobbies?search=${encodeURIComponent(query)}`)); } catch (reason) { setError(message(reason)); } };
+  useEffect(() => { void refresh(""); const timer = window.setInterval(() => void refresh(search), 10_000); return () => window.clearInterval(timer); }, []);
+  const join = async (code: string) => { setBusy(true); setError(""); try { await api(`/lobbies/${code}/join`, { method: "POST", body: "{}" }); await onLobby(code); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
+  return <main className="portrait-view lobby-list-view"><Orientation portrait /><header className="app-header"><button className="button-quiet" onClick={() => void onLogout()}>Logout</button><h1 className="brand brand-small">Escalera</h1><span className="profile-icon" aria-label="Profil">{user.username[0].toUpperCase()}</span></header><section className="lobby-list-content"><div className="welcome-row"><h2 className="welcome">Willkommen, {user.username}</h2><Connection connected={connected} /></div><form className="lobby-tools" onSubmit={(event) => { event.preventDefault(); void refresh(); }}><input aria-label="Lobbys durchsuchen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Code oder Gastgeber" /><button className="button-icon" aria-label="Suchen">⌕</button><button type="button" className="button-primary create-button" onClick={() => setDialog(true)}>+ Lobby</button></form>{error && <p className="error">{error}</p>}<section className="surface lobby-browser"><div className="list-title"><h3>Offene Lobbys</h3><span className="badge">{lobbies.length}</span></div><div className="lobby-scroll">{lobbies.length ? lobbies.map((entry) => <article className="surface lobby-card" key={entry.code}><div className="lobby-card-info"><strong>{entry.code}</strong><div className="lobby-meta"><span className="lobby-pill">{entry.players.length}/{entry.settings.maxPlayers} Spieler</span><span className="lobby-pill">Erstellt von {entry.host.username}</span></div></div><button className="join-button" disabled={busy} onClick={() => void join(entry.code)}>Beitreten</button></article>) : <div className="empty-state"><strong>Noch keine Lobby offen.</strong><span className="muted">Erstelle die erste Runde.</span></div>}</div></section></section>{dialog && <LobbySettingsDialog onClose={() => setDialog(false)} onCreated={onLobby} setError={setError} />}</main>;
 }
 
-function LobbyScreen({ user, lobby, connected, error, onReady, onStart, onLeave }: { user: User; lobby: Lobby; connected: boolean; error: string; onReady: () => void; onStart: () => void; onLeave: () => void }) {
-  const isHost = lobby.host.id === user.id; const self = lobby.players.find((player) => player.user.id === user.id); const allReady = lobby.players.length >= 2 && lobby.players.every((player) => player.ready);
-  return <main className="app-shell"><section className="lobby-screen"><header className="topbar"><div><button className="text-button" onClick={onLeave}>‹ Zurück</button><p className="eyebrow">Lobby-Code</p><h1 className="code">{lobby.code}</h1></div><Connection connected={connected} /></header><article className="panel"><h2>Spieler ({lobby.players.length}/{lobby.settings.maxPlayers})</h2><div className="player-list">{lobby.players.map((player) => <div className="player" key={player.user.id}><span className="avatar small">{player.user.username.slice(0, 1)}</span><span>{player.user.username}{player.user.id === lobby.host.id ? " · Gastgeber" : ""}</span><strong className={player.ready ? "ready" : "waiting"}>{player.ready ? "Bereit" : "Wartet"}</strong></div>)}</div><p className="hint">{lobby.settings.jokersPerPlayer} Joker pro Spieler · {lobby.settings.maxTurnSeconds} Sekunden pro Zug</p><div className="actions"><button onClick={onReady}>{self?.ready ? "Doch nicht bereit" : "Ich bin bereit"}</button>{isHost && <button className="secondary" onClick={onStart} disabled={!allReady}>Partie starten</button>}</div>{error && <p className="error">{error}</p>}</article></section></main>;
+function LobbySettingsDialog({ onClose, onCreated, setError, lobby }: { onClose: () => void; onCreated?: (code: string) => Promise<void>; setError: (value: string) => void; lobby?: Lobby }) {
+  const initial = lobby?.settings ?? { maxPlayers: 4, jokersPerPlayer: 1, maxTurnSeconds: 60, streetsRequireSameSuit: true, confirmTurnEnd: true };
+  const [busy, setBusy] = useState(false); const [settings, setSettings] = useState({ ...initial, maxTurnSeconds: initial.maxTurnSeconds ?? 60 });
+  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); try { const saved = await api<Lobby>(lobby ? `/lobbies/${lobby.code}/settings` : "/lobbies", { method: "POST", body: JSON.stringify(settings) }); onClose(); if (!lobby) await onCreated?.(saved.code); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
+  return <div className="dialog-backdrop" role="presentation"><section className="surface dialog"><div className="dialog-title"><h2>{lobby ? "Einstellungen" : "Lobby erstellen"}</h2><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><form onSubmit={submit} className="settings-form"><label>Maximale Spieler<select value={settings.maxPlayers} onChange={(event) => setSettings({ ...settings, maxPlayers: Number(event.target.value) })}>{[2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Joker pro Spieler<select value={settings.jokersPerPlayer} onChange={(event) => setSettings({ ...settings, jokersPerPlayer: Number(event.target.value) })}>{[0,1,2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Zeit pro Zug<select value={settings.maxTurnSeconds} onChange={(event) => setSettings({ ...settings, maxTurnSeconds: Number(event.target.value) })}>{[30,45,60,90,120,180].map((value) => <option key={value} value={value}>{value} Sekunden</option>)}</select></label><button className="button-primary" disabled={busy}>{busy ? "Speichere …" : lobby ? "Speichern" : "Lobby erstellen"}</button></form></section></div>;
 }
 
-function GameTable({ user, lobby, game, connected, onLeave }: { user: User; lobby: Lobby; game: Game; connected: boolean; onLeave: () => void }) {
-  const players = game.state.players.map((state) => ({ ...state, name: lobby.players.find((entry) => entry.user.id === state.userId)?.user.username ?? "Spieler" }));
-  return <main className="game-shell"><header className="game-header"><button className="text-button" onClick={onLeave}>‹ Lobby</button><span>Phase {game.state.phase}</span><Connection connected={connected} /></header><section className="opponents">{players.filter((player) => player.userId !== user.id).map((player) => <div className={player.userId === game.state.activePlayerId ? "opponent active" : "opponent"} key={player.userId}><strong>{player.name}</strong><span>{player.handCount} Karten · {player.coins} Münzen</span></div>)}</section><section className="table"><div className="pile"><span>Nachziehen</span><strong>{game.state.drawPileCount}</strong></div><div className="pile discard"><span>Ablage</span><strong>{cardLabel(game.state.discardTop)}</strong></div></section><section className="hand"><p>{game.state.activePlayerId === user.id ? "Du bist am Zug" : "Warte auf den aktiven Spieler"}</p><div className="cards">{game.state.ownHand.map((card) => <article className={`card ${card.kind === "standard" && (card.suit === "hearts" || card.suit === "diamonds") ? "red" : ""}`} key={card.id}><strong>{cardLabel(card)}</strong></article>)}</div></section></main>;
+function LobbyView({ user, lobby, connected, error, setError, onLeave }: { user: User; lobby: Lobby; connected: boolean; error: string; setError: (value: string) => void; onLeave: () => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const self = lobby.players.find((player) => player.user.id === user.id); const isHost = lobby.host.id === user.id;
+  const action = async (path: string) => { setError(""); try { await api(`/lobbies/${lobby.code}/${path}`, { method: "POST", body: "{}" }); } catch (reason) { setError(message(reason)); } };
+  return <main className="portrait-view lobby-view"><Orientation portrait /><header className="lobby-header"><div><p className="overline">Lobby</p><h1 className="lobby-code">{lobby.code}</h1></div><div className="lobby-status">{isHost && <button className="button-quiet" onClick={() => setEditing(true)}>Einstellungen</button>}<Connection connected={connected} /></div></header><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span><span className="badge">Bestätigung {lobby.settings.confirmTurnEnd ? "an" : "aus"}</span></section><section className="surface members-panel"><div className="list-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className="member-list">{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"}`} key={player.user.id}><span className="profile-icon">{player.user.username[0].toUpperCase()}</span><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button className="button-danger" onClick={() => void onLeave()}>Verlassen</button><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
 }
 
-function Connection({ connected }: { connected: boolean }) { return <span className={connected ? "connection online" : "connection"}>{connected ? "Live verbunden" : "Verbinde …"}</span>; }
+function GameView({ user, lobby, game, connected, onLeave }: { user: User; lobby: Lobby; game: Game; connected: boolean; onLeave: () => Promise<void> }) {
+  const [menu, setMenu] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
+  const opponents = useMemo(() => game.state.players.filter((player) => player.userId !== user.id).map((player) => ({ ...player, name: lobby.players.find((entry) => entry.user.id === player.userId)?.user.username ?? "Spieler" })).sort((a, b) => Number(a.userId === game.state.activePlayerId) - Number(b.userId === game.state.activePlayerId)), [game, lobby, user]);
+  const hand = useMemo(() => [...game.state.ownHand].sort((a, b) => cardSort(a, b, sort)), [game.state.ownHand, sort]);
+  return <main className="landscape-view game-view"><Orientation landscape /><header className="game-top"><button className="button-icon" aria-label="Spielmenü" onClick={() => setMenu(true)}>☰</button><div className="opponent-row">{opponents.map((player) => <article className={`opponent-card ${player.userId === game.state.activePlayerId ? "is-active" : ""}`} key={player.userId}><strong>{player.name}</strong><span>{player.handCount} Karten</span><span>{player.coins} Münzen · 0 P</span></article>)}</div><Connection connected={connected} /></header><section className="game-board"><article className="game-pile draw-pile"><span>Nachziehen</span><strong>{game.state.drawPileCount}</strong></article><div className="meld-zone"><div className="empty-meld">Meld-Zone</div></div><article className="game-pile discard-pile"><span>Ablage</span><strong>{cardLabel(game.state.discardTop)}</strong></article></section><section className="player-hand"><div className="turn-label">{game.state.activePlayerId === user.id ? "Dein Zug" : `Phase ${game.state.phase}`}</div><div className="hand-cards">{hand.map((card, index) => <article className={`playing-card ${isRed(card) ? "red-card" : ""}`} style={{ "--card-index": index } as React.CSSProperties} key={card.id}><strong>{cardLabel(card)}</strong></article>)}</div></section>{menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><button>Scoreboard</button><button onClick={() => setSort(sort === "rank" ? "suit" : "rank")}>Hand: {sort === "rank" ? "Wert" : "Zeichen"}</button><button>Meine Statistiken</button><button>Spielerprofile</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}</main>;
+}
+
+function Orientation({ portrait, landscape }: { portrait?: boolean; landscape?: boolean }) { return <div className="orientation-notice"><div><div className="rotate-icon">↻</div><h2>Gerät drehen</h2><p className="muted">Diese Ansicht ist für {portrait ? "Hochformat" : landscape ? "Querformat" : "eine andere Ausrichtung"} gestaltet.</p></div></div>; }
+function Connection({ connected }: { connected: boolean }) { return <span className={`connection ${connected ? "online" : ""}`}>{connected ? "Online" : "Verbinde"}</span>; }
+function suitSymbol(suit: string) { return ({ clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠" } as Record<string, string>)[suit] ?? "?"; }
+function cardLabel(card: Card) { return card.kind === "joker" ? "Joker" : `${card.rank} ${suitSymbol(card.suit)}`; }
+function isRed(card: Card) { return card.kind === "standard" && (card.suit === "hearts" || card.suit === "diamonds"); }
+function cardSort(a: Card, b: Card, mode: "rank" | "suit") { const rank = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]; const av = a.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(a.rank) : a.suit.localeCompare(b.kind === "standard" ? b.suit : "zz"); const bv = b.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(b.rank) : 0; return typeof av === "number" && typeof bv === "number" ? av - bv : 0; }
+function message(reason: unknown) { return reason instanceof Error ? reason.message : "Aktion konnte nicht ausgeführt werden."; }

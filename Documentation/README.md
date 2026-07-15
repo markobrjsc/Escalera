@@ -9,6 +9,9 @@ Die Dokumentation wird unabhängig von einer früheren technischen Umsetzung ers
 - [Functional-Requirements.md](Functional-Requirements.md) – gewünschte Funktionen
 - [Game-Logic.md](Game-Logic.md) – fachliche Abläufe und Zustände
 - [Screens-and-UX.md](Screens-and-UX.md) – Ansichten und Bedienung
+- [Responsive-Frontend.md](Responsive-Frontend.md) – Viewport-Skalierung, Mindestgrößen und Ausrichtung
+- [Design-System.md](Design-System.md) – Farbpalette, Typografie und einheitliche UI-Komponenten
+- [View-Specifications.md](View-Specifications.md) – verbindliche Inhalte der vier Hauptansichten
 - [Data-Model.md](Data-Model.md) – benötigte fachliche Daten
 - [Non-Functional-Requirements.md](Non-Functional-Requirements.md) – Qualitätsanforderungen
 - [Open-Questions.md](Open-Questions.md) – noch zu treffende Entscheidungen

@@ -22,4 +22,8 @@ export class CreateLobbyDto {
   @IsOptional()
   @IsBoolean()
   streetsRequireSameSuit = false;
+
+  @IsOptional()
+  @IsBoolean()
+  confirmTurnEnd = true;
 }

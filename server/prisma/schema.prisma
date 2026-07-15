@@ -43,6 +43,7 @@ model Lobby {
   jokersPerPlayer        Int          @default(1)
   maxTurnSeconds         Int?
   streetsRequireSameSuit Boolean      @default(false)
+  confirmTurnEnd         Boolean      @default(true)
   createdAt              DateTime     @default(now())
   expiresAt              DateTime?
   host                   User         @relation("LobbyHost", fields: [hostId], references: [id], onDelete: Restrict)
