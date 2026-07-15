@@ -13,10 +13,12 @@ import { ObjectStorageService } from "./profiles/object-storage.service.js";
 import { ProfilesController } from "./profiles/profiles.controller.js";
 import { ProfilesService } from "./profiles/profiles.service.js";
 import { RealtimeGateway } from "./realtime/realtime.gateway.js";
+import { GamesController } from "./game/games.controller.js";
+import { GamesService } from "./game/games.service.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
-  controllers: [HealthController, AuthController, ProfilesController, LobbiesController],
+  controllers: [HealthController, AuthController, ProfilesController, LobbiesController, GamesController],
   providers: [
     PrismaService,
     AuthService,
@@ -25,6 +27,7 @@ import { RealtimeGateway } from "./realtime/realtime.gateway.js";
     ObjectStorageService,
     LobbiesService,
     RealtimeGateway,
+    GamesService,
     { provide: APP_GUARD, useClass: ThrottlerGuard }
   ]
 })
