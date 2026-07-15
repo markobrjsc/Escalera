@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import type { RecentGameAction } from "@escalera/contracts";
 
 const SUITS = ["clubs", "diamonds", "hearts", "spades"] as const;
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"] as const;
@@ -54,6 +55,8 @@ export interface GameState {
   roundEndedById: string | null;
   roundResults: RoundResult[];
   placements: FinalPlacement[];
+  processedCommands: Array<{ commandId: string; userId: string; version: number }>;
+  recentActions: RecentGameAction[];
 }
 
 export interface PlayerGameView {
@@ -69,6 +72,7 @@ export interface PlayerGameView {
   roundEndedById: string | null;
   lastRoundResult: RoundResult | null;
   placements: FinalPlacement[];
+  recentActions: RecentGameAction[];
   players: Array<{ userId: string; handCount: number; coins: number; phaseLaid: boolean; totalPenalty: number; timeouts: number; disconnectSkips: number }>;
   ownHand: GameCard[];
 }
@@ -95,7 +99,7 @@ export function createInitialGameState(playerIds: readonly string[], jokersPerPl
   const players = playerIds.map((userId) => ({ userId, hand: cards.splice(0, 11), coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0, disconnectSkips: 0 }));
   const discardTop = cards.shift();
   if (!discardTop) throw new Error("Kartensatz enthält zu wenige Karten.");
-  return { status: "ACTIVE", round: 1, phase: 1, jokersPerPlayer, maxTurnSeconds, activePlayerId: playerIds[random(playerIds.length)], players, drawPile: cards, discardPile: [discardTop], melds: [], turn: { hasDrawn: false, deadlineAt: nextTurnDeadline(maxTurnSeconds, now) }, discardOffer: null, roundEndedById: null, roundResults: [], placements: [] };
+  return { status: "ACTIVE", round: 1, phase: 1, jokersPerPlayer, maxTurnSeconds, activePlayerId: playerIds[random(playerIds.length)], players, drawPile: cards, discardPile: [discardTop], melds: [], turn: { hasDrawn: false, deadlineAt: nextTurnDeadline(maxTurnSeconds, now) }, discardOffer: null, roundEndedById: null, roundResults: [], placements: [], processedCommands: [], recentActions: [] };
 }
 
 export function nextTurnDeadline(maxTurnSeconds: number | null, now = Date.now()) {
@@ -117,7 +121,9 @@ export function normalizeGameState(state: GameState): GameState {
     discardOffer: state.discardOffer ?? null,
     roundEndedById: state.roundEndedById ?? null,
     roundResults: state.roundResults ?? [],
-    placements: state.placements ?? []
+    placements: state.placements ?? [],
+    processedCommands: state.processedCommands ?? [],
+    recentActions: state.recentActions ?? []
   };
 }
 
@@ -138,6 +144,7 @@ export function toPlayerGameView(rawState: GameState, viewerId: string): PlayerG
     roundEndedById: state.roundEndedById,
     lastRoundResult: state.roundResults.at(-1) ?? null,
     placements: state.placements,
+    recentActions: state.recentActions,
     players: state.players.map((player) => ({ userId: player.userId, handCount: player.hand.length, coins: player.coins, phaseLaid: player.phaseLaid, totalPenalty: player.totalPenalty, timeouts: player.timeouts, disconnectSkips: player.disconnectSkips })),
     ownHand: ownState.hand
   };

@@ -15,6 +15,7 @@ type Card = { id: string; kind: "joker" } | { id: string; kind: "standard"; rank
 type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: Card[]; sameSuit: boolean };
 type RoundResult = { round: number; phase: number; endedById: string; scores: Array<{ userId: string; penalty: number; totalPenalty: number }> };
 type FinalPlacement = { userId: string; rank: number; totalPenalty: number };
+type RecentGameAction = { commandId: string; userId: string; type: string; version: number; createdAt: string };
 type Game = {
   version: number;
   state: {
@@ -30,6 +31,7 @@ type Game = {
     roundEndedById: string | null;
     lastRoundResult: RoundResult | null;
     placements: FinalPlacement[];
+    recentActions: RecentGameAction[];
     players: Array<{ userId: string; handCount: number; coins: number; phaseLaid: boolean; totalPenalty: number; timeouts: number }>;
     ownHand: Card[];
   };
@@ -37,9 +39,11 @@ type Game = {
 
 async function api<T>(path: string, options: RequestInit = {}) {
   const response = await fetch(`${API_URL}${path}`, { credentials: "include", headers: { ...(options.body ? { "content-type": "application/json" } : {}), ...options.headers }, ...options });
-  if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.message ?? "Etwas ist schiefgelaufen."); }
+  if (!response.ok) { const body = await response.json().catch(() => null); throw new ApiError(Array.isArray(body?.message) ? body.message.join(" ") : body?.message ?? "Etwas ist schiefgelaufen.", body); }
   return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
 }
+
+class ApiError extends Error { constructor(message: string, readonly body: unknown) { super(message); } }
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -112,9 +116,12 @@ function GameView({ user, lobby, game, connected, onGame, onLeave }: { user: Use
   const act = async (path: string, body?: object) => {
     setBusy(true); setActionError("");
     try {
-      const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) });
+      const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) });
       onGame(result); setSelected([]);
-    } catch (reason) { setActionError(message(reason)); } finally { setBusy(false); }
+    } catch (reason) {
+      if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game);
+      setActionError(message(reason));
+    } finally { setBusy(false); }
   };
   const toggleCard = (cardId: string) => setSelected((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
   const submitPhase = () => {

@@ -22,7 +22,9 @@ const baseState = (): GameState => ({
   discardOffer: null,
   roundEndedById: null,
   roundResults: [],
-  placements: []
+  placements: [],
+  processedCommands: [],
+  recentActions: []
 });
 
 describe("autoritärer Spielzug", () => {
