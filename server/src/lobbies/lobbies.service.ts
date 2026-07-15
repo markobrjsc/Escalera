@@ -5,6 +5,8 @@ import type { GameState } from "../game/game-state.js";
 import { createInitialGameState, toPlayerGameView } from "../game/game-state.js";
 import { PrismaService } from "../prisma.service.js";
 import { CreateLobbyDto } from "./lobby.dto.js";
+import { PresenceService } from "../realtime/presence.service.js";
+import { LobbyLifecycleService } from "./lobby-lifecycle.service.js";
 
 const lobbyInclude = {
   host: { select: { id: true, username: true } },
@@ -14,7 +16,7 @@ const lobbyInclude = {
 
 @Injectable()
 export class LobbiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly presence: PresenceService, private readonly lifecycle: LobbyLifecycleService) {}
 
   async create(userId: string, input: CreateLobbyDto) {
     const code = await this.newCode();
@@ -78,6 +80,7 @@ export class LobbiesService {
     const remaining = lobby.players.filter((entry) => entry.userId !== userId);
     if (remaining.length === 0) {
       await this.prisma.lobby.delete({ where: { id: lobby.id } });
+      await this.lifecycle.cancel(lobby.code);
       return { deleted: true as const, code: lobby.code };
     }
     await this.prisma.$transaction([
@@ -99,7 +102,7 @@ export class LobbiesService {
   }
 
   private async createGame(lobby: Awaited<ReturnType<LobbiesService["getLobby"]>>) {
-    const state = createInitialGameState(lobby.players.map((player) => player.userId), lobby.jokersPerPlayer);
+    const state = createInitialGameState(lobby.players.map((player) => player.userId), lobby.jokersPerPlayer, undefined, lobby.maxTurnSeconds);
     await this.prisma.$transaction(async (transaction) => {
       const updated = await transaction.lobby.updateMany({ where: { id: lobby.id, status: "OPEN" }, data: { status: "ACTIVE" } });
       if (updated.count !== 1) return;
@@ -143,7 +146,7 @@ export class LobbiesService {
         streetsRequireSameSuit: lobby.streetsRequireSameSuit,
         confirmTurnEnd: lobby.confirmTurnEnd
       },
-      players: lobby.players.map((player) => ({ user: player.user, ready: player.ready }))
+      players: lobby.players.map((player) => ({ user: player.user, ready: player.ready, connected: this.presence.isConnected(lobby.code, player.userId) }))
     };
   }
 

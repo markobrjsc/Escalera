@@ -1,14 +1,15 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service.js";
-import { addCardToMeld, buyDiscard, discardCard, drawCard, GameActionError, layAdditionalMeld, layPhase } from "./game-engine.js";
+import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, GameActionError, layAdditionalMeld, layPhase, skipDisconnectedTurn } from "./game-engine.js";
 import { normalizeGameState, toPlayerGameView, type GameState } from "./game-state.js";
+import { LobbyLifecycleService } from "../lobbies/lobby-lifecycle.service.js";
 
 type LoadedGame = Prisma.GameGetPayload<{ include: { lobby: { include: { players: true } } } }>;
 
 @Injectable()
 export class GamesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly lifecycle: LobbyLifecycleService) {}
 
   draw(userId: string, code: string, source: "draw" | "discard") {
     return this.mutate(userId, code, (state) => drawCard(state, userId, source));
@@ -34,6 +35,38 @@ export class GamesService {
     return this.mutate(userId, code, (state) => buyDiscard(state, userId));
   }
 
+  async expireDueTurns(now = Date.now()) {
+    const games = await this.prisma.game.findMany({ where: { status: "ACTIVE" }, include: { lobby: { include: { players: true } } } });
+    const changedCodes: string[] = [];
+    for (const game of games) {
+      const current = normalizeGameState(game.state as unknown as GameState);
+      if (!current.turn.deadlineAt || Date.parse(current.turn.deadlineAt) > now) continue;
+      let state: GameState;
+      try { state = expireTurn(structuredClone(current), now); } catch (error) {
+        if (error instanceof GameActionError) continue;
+        throw error;
+      }
+      const updated = await this.prisma.game.updateMany({
+        where: { id: game.id, version: game.version, status: "ACTIVE" },
+        data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
+      });
+      if (updated.count === 1) changedCodes.push(game.lobby.code);
+    }
+    return changedCodes;
+  }
+
+  async skipDisconnected(code: string, userId: string, now = Date.now()) {
+    const game = await this.load(code);
+    const current = normalizeGameState(game.state as unknown as GameState);
+    if (current.status === "FINISHED" || current.activePlayerId !== userId) return false;
+    const state = skipDisconnectedTurn(structuredClone(current), userId, now);
+    const updated = await this.prisma.game.updateMany({
+      where: { id: game.id, version: game.version, status: "ACTIVE" },
+      data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
+    });
+    return updated.count === 1;
+  }
+
   private async mutate(userId: string, code: string, action: (state: GameState, game: LoadedGame) => GameState) {
     const game = await this.load(code);
     if (!game.lobby.players.some((entry) => entry.userId === userId)) throw new ForbiddenException("Du bist nicht Mitglied dieser Partie.");
@@ -49,6 +82,7 @@ export class GamesService {
       data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
     });
     if (updated.count !== 1) throw new ConflictException("Der Spielzustand wurde bereits verändert. Bitte erneut versuchen.");
+    if (state.status === "FINISHED") await this.lifecycle.finish(game.lobby.code);
     return { version: game.version + 1, state: toPlayerGameView(state, userId) };
   }
 

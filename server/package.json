@@ -15,8 +15,8 @@
     "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
-    "@escalera/game-rules": "*",
     "@aws-sdk/client-s3": "^3.900.0",
+    "@escalera/game-rules": "*",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
@@ -31,6 +31,7 @@
     "cookie-parser": "^1.4.7",
     "multer": "^2.0.2",
     "prisma": "^6.16.2",
+    "redis": "^6.1.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sharp": "^0.34.3",

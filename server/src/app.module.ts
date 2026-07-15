@@ -15,12 +15,19 @@ import { ProfilesService } from "./profiles/profiles.service.js";
 import { RealtimeGateway } from "./realtime/realtime.gateway.js";
 import { GamesController } from "./game/games.controller.js";
 import { GamesService } from "./game/games.service.js";
+import { TurnTimerService } from "./game/turn-timer.service.js";
+import { PresenceService } from "./realtime/presence.service.js";
+import { RedisService } from "./redis.service.js";
+import { LobbyLifecycleService } from "./lobbies/lobby-lifecycle.service.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
   controllers: [HealthController, AuthController, ProfilesController, LobbiesController, GamesController],
   providers: [
     PrismaService,
+    RedisService,
+    PresenceService,
+    LobbyLifecycleService,
     AuthService,
     SessionGuard,
     ProfilesService,
@@ -28,6 +35,7 @@ import { GamesService } from "./game/games.service.js";
     LobbiesService,
     RealtimeGateway,
     GamesService,
+    TurnTimerService,
     { provide: APP_GUARD, useClass: ThrottlerGuard }
   ]
 })
