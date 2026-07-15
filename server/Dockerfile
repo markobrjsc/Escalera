@@ -9,6 +9,7 @@ COPY packages/game-rules/package.json packages/game-rules/package.json
 RUN npm ci
 
 COPY tsconfig.base.json ./
+COPY packages/contracts packages/contracts
 COPY packages/game-rules packages/game-rules
 RUN npm run build --workspace=@escalera/game-rules
 COPY server/prisma server/prisma
