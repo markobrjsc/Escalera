@@ -56,6 +56,7 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
 
   useEffect(() => { api<{ user: User }>("/auth/me").then((result) => setUser(result.user)).catch(() => undefined).finally(() => setLoading(false)); }, []);
   useEffect(() => {
@@ -70,7 +71,7 @@ export function App() {
 
   const openLobby = async (code: string) => { const value = await api<Lobby>(`/lobbies/${code}`); setLobby(value); if (value.status === "ACTIVE") setGame(await api<Game>(`/lobbies/${code}/game`)); };
   const leaveLobby = async () => { if (!lobby) return; await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" }); setLobby(null); setGame(null); };
-  const logout = async () => { await api("/auth/logout", { method: "POST", body: "{}" }); setUser(null); setLobby(null); setGame(null); };
+  const logout = async () => { await api("/auth/logout", { method: "POST", body: "{}" }); setUser(null); setLobby(null); setGame(null); setError(""); };
   const updateUser = (next: User) => {
     setUser(next);
     setLobby((current) => current ? {
@@ -81,19 +82,35 @@ export function App() {
   };
 
   if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
-  if (!user) return <AccessView error={error} setError={setError} onAccess={setUser} />;
+  if (!user) return <AccessView error={error} setError={setError} onAccess={(next, created) => { setUser(next); if (created) setTutorialOpen(true); }} />;
   const view = game && lobby && lobby.status !== "OPEN"
-    ? <GameView user={user} lobby={lobby} game={game} connected={connected} onGame={setGame} onLeave={leaveLobby} onProfile={() => setProfileOpen(true)} />
+    ? <GameView user={user} lobby={lobby} game={game} connected={connected} onGame={setGame} onLeave={leaveLobby} onProfile={() => setProfileOpen(true)} onTutorial={() => setTutorialOpen(true)} />
     : lobby
       ? <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} />
       : <LobbyListView user={user} connected={connected} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileOpen(true)} />;
-  return <>{view}{profileOpen && <ProfileDialog user={user} onUser={updateUser} onClose={() => setProfileOpen(false)} />}</>;
+  return <>{view}{profileOpen && <ProfileDialog user={user} onUser={updateUser} onTutorial={() => { setProfileOpen(false); setTutorialOpen(true); }} onClose={() => setProfileOpen(false)} />}{tutorialOpen && <TutorialDialog user={user} onUser={updateUser} onClose={() => setTutorialOpen(false)} />}</>;
 }
 
-function AccessView({ error, setError, onAccess }: { error: string; setError: (value: string) => void; onAccess: (user: User) => void }) {
-  const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [busy, setBusy] = useState(false);
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(""); try { onAccess((await api<{ user: User }>("/auth/access", { method: "POST", body: JSON.stringify({ username, password }) })).user); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
-  return <main className="portrait-view login-view"><Orientation portrait /><section className="surface login-card"><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} type="password" autoComplete="current-password" required /></label>{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : "Anmelden / Registrieren"}</button></form><p className="login-note muted">Ist dein Name noch frei, wird er mit diesem Passwort registriert. Ohne das Passwort kann der Name nicht wiederhergestellt werden.</p></section></main>;
+function AccessView({ error, setError, onAccess }: { error: string; setError: (value: string) => void; onAccess: (user: User, created: boolean) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const access = async (registration: boolean) => {
+    const result = await api<{ user: User; created: boolean }>("/auth/access", { method: "POST", body: JSON.stringify({ username, password, ...(registration ? { passwordConfirmation: confirmation, acceptPasswordLoss: accepted } : {}) }) });
+    onAccess(result.user, result.created);
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      if (registering) { await access(true); return; }
+      const { exists } = await api<{ exists: boolean }>(`/auth/username?username=${encodeURIComponent(username)}`);
+      if (exists) await access(false); else setRegistering(true);
+    } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
+  };
+  return <main className="portrait-view login-view"><Orientation portrait /><section className={`surface login-card ${registering ? "registration-card" : ""}`}><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => { setUsername(event.target.value); setRegistering(false); }} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => { setPassword(event.target.value); setRegistering(false); }} minLength={12} type="password" autoComplete={registering ? "new-password" : "current-password"} required /></label>{registering && <><label>Passwort wiederholen<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} type="password" autoComplete="new-password" required /></label><label className="registration-warning"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>Ich verstehe: Ohne dieses Passwort kann mein Konto nicht wiederhergestellt werden.</span></label></>}{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : registering ? "Konto verbindlich erstellen" : "Weiter"}</button>{registering && <button type="button" className="button-quiet" onClick={() => setRegistering(false)}>Zurück zur Anmeldung</button>}</form><p className="login-note muted">Ist dein Name noch frei, bestätigst du im nächsten Schritt bewusst die Registrierung.</p></section></main>;
 }
 
 function LobbyListView({ user, connected, error, setError, onLobby, onLogout, onProfile }: { user: User; connected: boolean; error: string; setError: (value: string) => void; onLobby: (code: string) => Promise<void>; onLogout: () => Promise<void>; onProfile: () => void }) {
@@ -118,7 +135,7 @@ function LobbyView({ user, lobby, connected, error, setError, onLeave }: { user:
   return <main className="portrait-view lobby-view"><Orientation portrait /><header className="lobby-header"><div><p className="overline">Lobby</p><h1 className="lobby-code">{lobby.code}</h1></div><div className="lobby-status">{isHost && <button className="button-quiet" onClick={() => setEditing(true)}>Einstellungen</button>}<Connection connected={connected} /></div></header><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span><span className="badge">Bestätigung {lobby.settings.confirmTurnEnd ? "an" : "aus"}</span></section><section className="surface members-panel"><div className="list-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className="member-list">{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"} ${player.connected ? "" : "is-offline"}`} key={player.user.id}><Avatar user={player.user} /><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"} · {player.connected ? "Online" : "Offline"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button className="button-danger" onClick={() => void onLeave()}>Verlassen</button><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
 }
 
-function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile }: { user: User; lobby: Lobby; game: Game; connected: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: () => void }) {
+function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: () => void; onTutorial: () => void }) {
   const [menu, setMenu] = useState(false); const [scoreboard, setScoreboard] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
   const [selected, setSelected] = useState<string[]>([]); const [busy, setBusy] = useState(false); const [actionError, setActionError] = useState("");
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
@@ -148,7 +165,7 @@ function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile }: 
     <header className="game-top"><button className="button-icon" aria-label="Spielmenü" onClick={() => setMenu(true)}>☰</button><div className="opponent-row">{opponents.map((player) => <article className={`opponent-card ${player.userId === game.state.activePlayerId ? "is-active" : ""} ${player.connected ? "" : "is-offline"}`} key={player.userId}><Avatar user={player.user} /><div><strong>{player.user.username}</strong><span>{player.connected ? `${player.handCount} Karten` : "Offline · wird übersprungen"}</span><span>{player.coins} Münzen · {player.totalPenalty} P</span></div></article>)}</div><Connection connected={connected} /></header>
     <section className="game-board"><button className="game-pile draw-pile" disabled={!game.state.turn.canAct || game.state.turn.hasDrawn || busy} onClick={() => void act("draw", { source: "draw" })}><span>Nachziehen</span><strong>{game.state.drawPileCount}</strong></button><div className="meld-zone">{game.state.melds.length ? game.state.melds.map((meld) => <article className="meld-card" key={meld.id}><div><strong>{meld.type === "group" ? "Gruppe" : "Straße"}</strong><span>{meld.cards.map(cardLabel).join(" · ")}</span></div><button disabled={!canPlay || !self.phaseLaid || selected.length !== 1} onClick={() => void act(`melds/${meld.id}/cards`, { cardId: selected[0] })}>Anlegen</button></article>) : <div className="empty-meld">Meld-Zone</div>}</div><div className="discard-area"><button className="game-pile discard-pile" disabled={!game.state.discardTop || !game.state.turn.canAct || game.state.turn.hasDrawn || busy} onClick={() => void act("draw", { source: "discard" })}><span>Ablage</span><strong>{game.state.discardTop ? cardLabel(game.state.discardTop) : "Leer"}</strong></button>{game.state.discardOffer && <button className="buy-button" disabled={busy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}</div></section>
     <section className="player-hand"><div className="hand-toolbar"><div className="turn-label">{game.state.status === "FINISHED" ? "Partie beendet" : game.state.activePlayerId === user.id ? `Dein Zug · Phase ${game.state.phase}` : `Runde ${game.state.round} · Phase ${game.state.phase}`}</div><TurnCountdown deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /><div className="turn-actions">{!self.phaseLaid ? <button disabled={!canPlay || selected.length < 3} onClick={submitPhase}>Phase auslegen</button> : <button disabled={!canPlay || selected.length < 3} onClick={() => void act("melds", { cardIds: selected })}>Kombi auslegen</button>}<button className="button-primary" disabled={!canPlay || selected.length !== 1} onClick={() => void act("discard", { cardId: selected[0] })}>Abwerfen</button></div>{actionError && <span className="game-error" role="alert">{actionError}</span>}</div><div className="hand-cards">{hand.map((card, index) => <button type="button" aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${isRed(card) ? "red-card" : ""} ${selected.includes(card.id) ? "is-selected" : ""}`} style={{ "--card-index": index } as React.CSSProperties} key={card.id}><strong>{cardLabel(card)}</strong></button>)}</div></section>
-    {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => setSort(sort === "rank" ? "suit" : "rank")}>Hand: {sort === "rank" ? "Wert" : "Zeichen"}</button><button onClick={() => { setMenu(false); onProfile(); }}>Mein Profil</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}
+    {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => setSort(sort === "rank" ? "suit" : "rank")}>Hand: {sort === "rank" ? "Wert" : "Zeichen"}</button><button onClick={() => { setMenu(false); onProfile(); }}>Mein Profil</button><button onClick={() => { setMenu(false); onTutorial(); }}>Kurzanleitung</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}
     {scoreboard && <Scoreboard game={game} lobby={lobby} onClose={() => setScoreboard(false)} />}
     {showRoundResult && <RoundResultOverlay result={game.state.lastRoundResult!} nextPhase={game.state.phase} lobby={lobby} onContinue={() => setDismissedRound(game.state.lastRoundResult!.round)} />}
     {game.state.status === "FINISHED" && <FinalResultOverlay placements={game.state.placements} lobby={lobby} onLeave={onLeave} />}
@@ -177,7 +194,7 @@ function TurnCountdown({ deadlineAt, finished }: { deadlineAt: string | null; fi
   return <span className={`turn-countdown ${remaining !== null && remaining <= 10 ? "is-urgent" : ""}`} aria-label={remaining === null ? "Keine Zugbegrenzung" : `${remaining} Sekunden verbleibend`}>{remaining === null ? "∞" : `${remaining}s`}</span>;
 }
 
-function ProfileDialog({ user, onUser, onClose }: { user: User; onUser: (user: User) => void; onClose: () => void }) {
+function ProfileDialog({ user, onUser, onTutorial, onClose }: { user: User; onUser: (user: User) => void; onTutorial: () => void; onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -202,7 +219,29 @@ function ProfileDialog({ user, onUser, onClose }: { user: User; onUser: (user: U
     try { onUser((await api<{ user: User }>("/profile/avatar", { method: "DELETE" })).user); setFile(null); }
     catch (reason) { setError(message(reason)); } finally { setBusy(false); }
   };
-  return <div className="dialog-backdrop"><section className="surface dialog profile-dialog"><div className="dialog-title"><div><p className="overline">Dein Konto</p><h2>Profil</h2></div><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><div className="profile-preview">{preview ? <img src={preview} alt="Neue Profilbild-Vorschau" /> : <Avatar user={user} large />}</div><strong className="profile-name">{user.username}</strong><label className="file-picker">JPEG, PNG oder WebP · maximal 5 MB<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>{error && <p className="error" role="alert">{error}</p>}<div className="profile-actions"><button disabled={!file || busy} className="button-primary" onClick={() => void upload()}>Bild speichern</button><button disabled={!user.avatarKey || busy} className="button-danger" onClick={() => void remove()}>Bild löschen</button></div></section></div>;
+  return <div className="dialog-backdrop"><section className="surface dialog profile-dialog"><div className="dialog-title"><div><p className="overline">Dein Konto</p><h2>Profil</h2></div><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><div className="profile-preview">{preview ? <img src={preview} alt="Neue Profilbild-Vorschau" /> : <Avatar user={user} large />}</div><strong className="profile-name">{user.username}</strong><button className="button-quiet" onClick={onTutorial}>Kurzanleitung erneut öffnen</button><label className="file-picker">JPEG, PNG oder WebP · maximal 5 MB<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>{error && <p className="error" role="alert">{error}</p>}<div className="profile-actions"><button disabled={!file || busy} className="button-primary" onClick={() => void upload()}>Bild speichern</button><button disabled={!user.avatarKey || busy} className="button-danger" onClick={() => void remove()}>Bild löschen</button></div></section></div>;
+}
+
+const TUTORIAL_STEPS = [
+  { title: "Dein Zug", text: "Ziehe zuerst eine Karte vom Nachzieh- oder Ablagestapel. Beende deinen Zug, indem du genau eine Karte abwirfst." },
+  { title: "Sieben Phasen", text: "Lege die geforderte Kombination vollständig aus. Sobald jemand seine Hand leert, steigen alle gemeinsam in die nächste Phase auf." },
+  { title: "Karten kaufen", text: "Solange der aktive Spieler die Ablage noch nicht genommen hat, kannst du ihre oberste Karte für eine Münze kaufen." },
+  { title: "Das Ziel", text: "Nach Phase 7 endet die Partie. Weniger Strafpunkte bedeuten die bessere Platzierung." }
+];
+
+function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: (user: User) => void; onClose: () => void }) {
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const finish = async () => {
+    setBusy(true); setError("");
+    try {
+      if (!user.tutorialCompleted) onUser((await api<{ user: User }>("/profile/tutorial/complete", { method: "POST", body: "{}" })).user);
+      onClose();
+    } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
+  };
+  const current = TUTORIAL_STEPS[step];
+  return <div className="dialog-backdrop tutorial-backdrop"><section className="surface dialog tutorial-dialog"><p className="overline">Kurzanleitung · {step + 1}/{TUTORIAL_STEPS.length}</p><div className="tutorial-suits" aria-hidden="true">♠ <span>♥</span> ♣ <span>♦</span></div><h2>{current.title}</h2><p>{current.text}</p><div className="tutorial-progress">{TUTORIAL_STEPS.map((_, index) => <span className={index === step ? "is-current" : ""} key={index} />)}</div>{error && <p className="error" role="alert">{error}</p>}<div className="tutorial-actions"><button className="button-quiet" disabled={busy} onClick={() => void finish()}>Überspringen</button>{step > 0 && <button disabled={busy} onClick={() => setStep(step - 1)}>Zurück</button>}<button className="button-primary" disabled={busy} onClick={() => step === TUTORIAL_STEPS.length - 1 ? void finish() : setStep(step + 1)}>{step === TUTORIAL_STEPS.length - 1 ? "Losspielen" : "Weiter"}</button></div></section></div>;
 }
 
 function Avatar({ user, large = false }: { user: Pick<User, "id" | "username" | "avatarKey">; large?: boolean }) {

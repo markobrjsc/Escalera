@@ -26,6 +26,12 @@ export class ProfilesController {
     return { user: { id: user.id, username: user.username, avatarKey: user.avatarKey, tutorialCompleted: user.tutorialCompleted } };
   }
 
+  @Post("tutorial/complete")
+  async completeTutorial(@Req() request: AuthenticatedRequest) {
+    const user = await this.profiles.completeTutorial(request.user.id);
+    return { user: { id: user.id, username: user.username, avatarKey: user.avatarKey, tutorialCompleted: user.tutorialCompleted } };
+  }
+
   @Get("avatar/:userId")
   async getAvatar(@Param("userId") userId: string, @Query("size", new ParseIntPipe({ optional: true })) size = 128) {
     return new StreamableFile(await this.profiles.getAvatar(userId, size), {

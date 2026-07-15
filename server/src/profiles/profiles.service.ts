@@ -59,6 +59,10 @@ export class ProfilesService {
     return user;
   }
 
+  completeTutorial(userId: string) {
+    return this.prisma.user.update({ where: { id: userId }, data: { tutorialCompleted: true } });
+  }
+
   async getAvatar(userId: string, requestedSize: number) {
     const size = requestedSize <= 128 ? 128 : 512;
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
