@@ -55,7 +55,7 @@ export class LobbyLifecycleService implements OnModuleInit, OnModuleDestroy {
       for (const code of codes) await this.redis.withLock(`lobby-lifecycle:${code}`, async () => {
         const lobby = await this.prisma.lobby.findUnique({ where: { code }, select: { id: true, status: true, expiresAt: true } });
         if (!lobby) return this.redis.unschedule(EXPIRATIONS, code);
-        if (lobby.status === "ACTIVE" && this.presence.connectedCount(code) >= 2) {
+        if (lobby.status !== "CLOSED" && this.presence.connectedCount(code) >= 2) {
           await this.clear(code);
           return;
         }
@@ -71,7 +71,7 @@ export class LobbyLifecycleService implements OnModuleInit, OnModuleDestroy {
 
   private async refreshUnlocked(code: string, now: number) {
     const lobby = await this.prisma.lobby.findUnique({ where: { code }, select: { status: true, expiresAt: true } });
-    if (!lobby || lobby.status === "OPEN") return;
+    if (!lobby) return;
     if (lobby.status === "CLOSED") {
       if (lobby.expiresAt) await this.redis.schedule(EXPIRATIONS, code, lobby.expiresAt);
       return;

@@ -1,0 +1,15 @@
+ALTER TABLE "UserStatistic"
+  ADD COLUMN "podiumFinishes" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "phasesLaid" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "meldsLaid" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "jokersPlayed" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "cardsBought" INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE "GameStatisticsRollup" (
+  "gameId" TEXT NOT NULL,
+  "processedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "GameStatisticsRollup_pkey" PRIMARY KEY ("gameId")
+);
+
+ALTER TABLE "GameStatisticsRollup" ADD CONSTRAINT "GameStatisticsRollup_gameId_fkey"
+  FOREIGN KEY ("gameId") REFERENCES "Game"("id") ON DELETE CASCADE ON UPDATE CASCADE;

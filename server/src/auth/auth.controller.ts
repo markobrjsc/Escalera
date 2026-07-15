@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { AuthService } from "./auth.service.js";
 import { AccessDto } from "./access.dto.js";
 import { AuthenticatedRequest, SessionGuard } from "./session.guard.js";
 import { SESSION_COOKIE, SESSION_MAX_AGE_MS } from "./auth.types.js";
 import { Req } from "@nestjs/common";
+import { UsernameDto } from "./username.dto.js";
 
 @Controller("auth")
 export class AuthController {
@@ -21,6 +22,11 @@ export class AuthController {
       path: "/"
     });
     return { created: result.created, user: result.user };
+  }
+
+  @Get("username")
+  async username(@Query() input: UsernameDto) {
+    return { exists: await this.auth.usernameExists(input.username) };
   }
 
   @Post("logout")

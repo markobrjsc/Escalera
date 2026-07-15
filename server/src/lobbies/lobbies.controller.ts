@@ -24,6 +24,11 @@ export class LobbiesController {
     return this.lobbies.listOpen(search);
   }
 
+  @Get("current")
+  current(@Req() request: AuthenticatedRequest) {
+    return this.lobbies.getCurrent(request.user.id);
+  }
+
   @Post(":code/join")
   async join(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
     const lobby = await this.lobbies.join(request.user.id, code);

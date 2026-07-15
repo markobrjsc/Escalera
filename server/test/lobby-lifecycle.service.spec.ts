@@ -30,6 +30,14 @@ describe("Lobby-Lebensdauer", () => {
     expect(context.redis.unschedule).toHaveBeenCalled();
   });
 
+  it("wendet die Zwei-Minuten-Frist auch auf eine noch offene Lobby an", async () => {
+    const context = setup();
+    const lobby = context.getLobby();
+    if (lobby) lobby.status = "OPEN" as never;
+    await context.service.refresh("ABC", 5_000);
+    expect(context.getLobby()?.expiresAt?.getTime()).toBe(125_000);
+  });
+
   it("löscht eine abgelaufene Lobby und benachrichtigt Listener", async () => {
     const context = setup();
     await context.service.refresh("ABC", 0);

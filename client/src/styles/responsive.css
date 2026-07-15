@@ -32,8 +32,16 @@ body { min-height: 100dvh; overflow: hidden; }
 .orientation-notice { display: none; }
 
 @media (orientation: landscape) {
-  .portrait-view > :not(.orientation-notice) { visibility: hidden; }
-  .portrait-view .orientation-notice { display: grid; }
+  .portrait-view {
+    width: min(calc(100vw - 2rem), max(50vw, 70dvh));
+    height: 90dvh;
+    min-height: 80dvh;
+    max-height: calc(100dvh - 1rem);
+    margin: auto;
+    border-inline: 1px solid var(--color-teal);
+    box-shadow: 0 0 3rem #0008;
+  }
+  .portrait-view .orientation-notice { display: none; }
 }
 
 @media (orientation: portrait) {

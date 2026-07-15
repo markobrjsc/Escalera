@@ -1,4 +1,4 @@
-import { IsString, Length, Matches } from "class-validator";
+import { IsBoolean, IsOptional, IsString, Length, Matches } from "class-validator";
 
 export class AccessDto {
   @IsString()
@@ -9,4 +9,13 @@ export class AccessDto {
   @IsString()
   @Length(12, 128)
   password!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(12, 128)
+  passwordConfirmation?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  acceptPasswordLoss?: boolean;
 }

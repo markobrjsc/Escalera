@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
 import * as argon2 from "argon2";
 import { PrismaService } from "../prisma.service.js";
 import { AccessDto } from "./access.dto.js";
@@ -20,6 +20,12 @@ export class AuthService {
         throw new UnauthorizedException("Ungültiger Benutzername oder Passwort.");
       }
     } else {
+      if (input.passwordConfirmation !== input.password) {
+        throw new BadRequestException("Die Passwörter stimmen nicht überein.");
+      }
+      if (!input.acceptPasswordLoss) {
+        throw new BadRequestException("Bitte bestätige, dass dieses Konto ohne Passwort nicht wiederhergestellt werden kann.");
+      }
       try {
         user = await this.prisma.user.create({
           data: {
@@ -47,6 +53,10 @@ export class AuthService {
       }
     });
     return { created, token, user: this.publicUser(user) };
+  }
+
+  async usernameExists(username: string) {
+    return Boolean(await this.prisma.user.findUnique({ where: { usernameNormalized: normalizeUsername(username.trim().normalize("NFKC")) }, select: { id: true } }));
   }
 
   async logout(token: string | undefined) {

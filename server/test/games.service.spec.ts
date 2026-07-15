@@ -15,7 +15,7 @@ describe("versionssichere Spielbefehle", () => {
         game.state = data.state; version += 1; return { count: 1 };
       })
     } };
-    const service = new GamesService(prisma as never, { finish: vi.fn() } as never);
+    const service = new GamesService(prisma as never, { finish: vi.fn() } as never, { recordFinishedGame: vi.fn() } as never);
     const command = { commandId: "11111111-1111-4111-8111-111111111111", expectedVersion: 1 };
 
     const first = await service.draw("p1", "ABC", "draw", command);

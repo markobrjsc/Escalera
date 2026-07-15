@@ -75,6 +75,9 @@ export function layPhase(rawState: GameState, userId: string, combinationCardIds
   if (!result.valid) validationError(result.reason);
   current.hand = removeCards(current.hand, combinations.flat());
   current.phaseLaid = true;
+  current.metrics.phasesLaid += 1;
+  current.metrics.meldsLaid += combinations.length;
+  current.metrics.jokersPlayed += combinations.flat().filter((card) => card.kind === "joker").length;
   for (const cards of combinations) state.melds.push({ id: randomUUID(), ownerId: userId, type: state.phase === 7 ? "street" : "group", cards, sameSuit: state.phase === 7 });
   return state;
 }
@@ -89,6 +92,8 @@ export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: 
   const street = validateStreet(cards, { minimumSize: 3, sameSuit: streetsRequireSameSuit });
   if (!group.valid && !street.valid) validationError(`${group.reason} ${street.reason}`);
   current.hand = removeCards(current.hand, cards);
+  current.metrics.meldsLaid += 1;
+  current.metrics.jokersPlayed += cards.filter((card) => card.kind === "joker").length;
   state.melds.push({ id: randomUUID(), ownerId: userId, type: group.valid ? "group" : "street", cards, sameSuit: group.valid ? false : streetsRequireSameSuit });
   return state;
 }
@@ -106,6 +111,7 @@ export function addCardToMeld(rawState: GameState, userId: string, meldId: strin
   if (!result.valid) validationError(result.reason);
   meld.cards = cards;
   current.hand = removeCards(current.hand, [card]);
+  if (card.kind === "joker") current.metrics.jokersPlayed += 1;
   return state;
 }
 
@@ -204,6 +210,7 @@ export function buyDiscard(rawState: GameState, userId: string) {
   state.discardPile.pop();
   buyer.hand.push(card);
   buyer.coins -= 1;
+  buyer.metrics.cardsBought += 1;
   state.discardOffer = null;
   return state;
 }

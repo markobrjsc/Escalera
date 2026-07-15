@@ -5,13 +5,14 @@ import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, GameActio
 import { normalizeGameState, toPlayerGameView, type GameState } from "./game-state.js";
 import { LobbyLifecycleService } from "../lobbies/lobby-lifecycle.service.js";
 import type { GameActionType } from "@escalera/contracts";
+import { StatisticsService } from "../profiles/statistics.service.js";
 
 type LoadedGame = Prisma.GameGetPayload<{ include: { lobby: { include: { players: true } } } }>;
 type CommandMetadata = { commandId: string; expectedVersion: number };
 
 @Injectable()
 export class GamesService {
-  constructor(private readonly prisma: PrismaService, private readonly lifecycle: LobbyLifecycleService) {}
+  constructor(private readonly prisma: PrismaService, private readonly lifecycle: LobbyLifecycleService, private readonly statistics: StatisticsService) {}
 
   draw(userId: string, code: string, source: "draw" | "discard", command: CommandMetadata) {
     return this.mutate(userId, code, "draw", command, (state) => drawCard(state, userId, source));
@@ -96,7 +97,10 @@ export class GamesService {
       data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
     });
     if (updated.count !== 1) throw new ConflictException("Der Spielzustand wurde bereits verändert. Bitte erneut versuchen.");
-    if (state.status === "FINISHED") await this.lifecycle.finish(game.lobby.code);
+    if (state.status === "FINISHED") {
+      await this.statistics.recordFinishedGame(game.id, state);
+      await this.lifecycle.finish(game.lobby.code);
+    }
     return { version: game.version + 1, state: toPlayerGameView(state, userId) };
   }
 

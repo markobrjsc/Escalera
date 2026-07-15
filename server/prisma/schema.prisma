@@ -61,7 +61,7 @@ model LobbyPlayer {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([lobbyId, userId])
-  @@index([userId])
+  @@unique([userId])
 }
 
 model Game {
@@ -74,6 +74,13 @@ model Game {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   lobby     Lobby      @relation(fields: [lobbyId], references: [id], onDelete: Cascade)
+  statisticsRollup GameStatisticsRollup?
+}
+
+model GameStatisticsRollup {
+  gameId      String   @id
+  processedAt DateTime @default(now())
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -92,7 +99,12 @@ model UserStatistic {
   userId          String   @id
   gamesPlayed     Int      @default(0)
   gamesWon        Int      @default(0)
+  podiumFinishes  Int      @default(0)
   totalPenalty    Int      @default(0)
+  phasesLaid      Int      @default(0)
+  meldsLaid       Int      @default(0)
+  jokersPlayed    Int      @default(0)
+  cardsBought     Int      @default(0)
   timeouts        Int      @default(0)
   reconnects      Int      @default(0)
   updatedAt       DateTime @updatedAt

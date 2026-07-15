@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { GameState } from "../game/game-state.js";
@@ -9,7 +9,7 @@ import { PresenceService } from "../realtime/presence.service.js";
 import { LobbyLifecycleService } from "./lobby-lifecycle.service.js";
 
 const lobbyInclude = {
-  host: { select: { id: true, username: true } },
+  host: { select: { id: true, username: true, avatarKey: true } },
   players: { include: { user: { select: { id: true, username: true, avatarKey: true } } }, orderBy: { joinedAt: "asc" as const } },
   game: true
 };
@@ -19,6 +19,7 @@ export class LobbiesService {
   constructor(private readonly prisma: PrismaService, private readonly presence: PresenceService, private readonly lifecycle: LobbyLifecycleService) {}
 
   async create(userId: string, input: CreateLobbyDto) {
+    await this.assertNoOtherLobby(userId);
     const code = await this.newCode();
     return this.prisma.lobby.create({
       data: { ...input, code, hostId: userId, players: { create: { userId } } },
@@ -44,6 +45,7 @@ export class LobbiesService {
     const lobby = await this.getLobby(code);
     if (lobby.status !== "OPEN") throw new BadRequestException("Diese Lobby ist nicht mehr offen.");
     if (lobby.players.some((player) => player.userId === userId)) return lobby;
+    await this.assertNoOtherLobby(userId);
     if (lobby.players.length >= lobby.maxPlayers) throw new BadRequestException("Die Lobby ist voll.");
     return this.prisma.lobby.update({
       where: { id: lobby.id },
@@ -116,6 +118,12 @@ export class LobbiesService {
     return this.publicLobby(lobby);
   }
 
+  async getCurrent(userId: string) {
+    const membership = await this.prisma.lobbyPlayer.findUnique({ where: { userId }, include: { lobby: { include: lobbyInclude } } });
+    if (!membership) return null;
+    return this.publicLobby(membership.lobby);
+  }
+
   async getGameView(userId: string, code: string) {
     const lobby = await this.getLobby(code);
     if (!lobby.players.some((player) => player.userId === userId)) throw new ForbiddenException("Du bist nicht Mitglied dieser Lobby.");
@@ -156,5 +164,10 @@ export class LobbiesService {
       if (!(await this.prisma.lobby.findUnique({ where: { code }, select: { id: true } }))) return code;
     }
     throw new BadRequestException("Lobby-Code konnte nicht erzeugt werden.");
+  }
+
+  private async assertNoOtherLobby(userId: string) {
+    const membership = await this.prisma.lobbyPlayer.findUnique({ where: { userId }, select: { lobby: { select: { code: true } } } });
+    if (membership) throw new ConflictException(`Du bist bereits Mitglied der Lobby ${membership.lobby.code}.`);
   }
 }
