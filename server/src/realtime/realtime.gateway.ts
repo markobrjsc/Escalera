@@ -5,6 +5,7 @@ import { SESSION_COOKIE } from "../auth/auth.types.js";
 import { LobbiesService } from "../lobbies/lobbies.service.js";
 import { GamesService } from "../game/games.service.js";
 import { PresenceService } from "./presence.service.js";
+import { LobbyLifecycleService } from "../lobbies/lobby-lifecycle.service.js";
 
 type WatchLobbyPayload = { code?: string };
 type RealtimeSocket = Socket & { data: { userId?: string; watchedCodes?: Set<string> } };
@@ -21,8 +22,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly auth: AuthService,
     private readonly lobbies: LobbiesService,
     private readonly games: GamesService,
-    private readonly presence: PresenceService
-  ) {}
+    private readonly presence: PresenceService,
+    private readonly lifecycle: LobbyLifecycleService
+  ) {
+    this.lifecycle.onDeleted((code) => this.server?.to(this.room(code)).emit("lobby:deleted", { code, reason: "expired" }));
+  }
 
   async handleConnection(client: RealtimeSocket) {
     const token = this.readCookie(client.handshake.headers.cookie, SESSION_COOKIE);
@@ -62,6 +66,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const update = await this.lobbies.getRealtimeUpdate(code);
     this.server.to(this.room(code)).emit("lobby:update", update.lobby);
     await Promise.all(update.playerIds.map((userId) => this.emitGameToPlayer(code, userId)));
+    await this.lifecycle.refresh(code);
   }
 
   private async emitGameToPlayer(code: string, userId: string) {

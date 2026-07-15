@@ -3,12 +3,13 @@ import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service.js";
 import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, GameActionError, layAdditionalMeld, layPhase, skipDisconnectedTurn } from "./game-engine.js";
 import { normalizeGameState, toPlayerGameView, type GameState } from "./game-state.js";
+import { LobbyLifecycleService } from "../lobbies/lobby-lifecycle.service.js";
 
 type LoadedGame = Prisma.GameGetPayload<{ include: { lobby: { include: { players: true } } } }>;
 
 @Injectable()
 export class GamesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly lifecycle: LobbyLifecycleService) {}
 
   draw(userId: string, code: string, source: "draw" | "discard") {
     return this.mutate(userId, code, (state) => drawCard(state, userId, source));
@@ -81,6 +82,7 @@ export class GamesService {
       data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
     });
     if (updated.count !== 1) throw new ConflictException("Der Spielzustand wurde bereits verändert. Bitte erneut versuchen.");
+    if (state.status === "FINISHED") await this.lifecycle.finish(game.lobby.code);
     return { version: game.version + 1, state: toPlayerGameView(state, userId) };
   }
 

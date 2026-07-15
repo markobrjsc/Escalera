@@ -56,6 +56,7 @@ export function App() {
     const live = io(`${API_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
     live.on("realtime:connected", () => { setConnected(true); setSocket(live); }); live.on("disconnect", () => { setConnected(false); setSocket(null); });
     live.on("lobby:update", (value: Lobby) => setLobby(value)); live.on("game:update", (value: Game) => setGame(value));
+    live.on("lobby:deleted", () => { setLobby(null); setGame(null); setError("Die Lobby wurde wegen Inaktivität geschlossen."); });
     return () => { live.disconnect(); setSocket(null); setConnected(false); };
   }, [user]);
   useEffect(() => { if (!socket || !lobby?.code) return; socket.emit("lobby:watch", { code: lobby.code }); return () => { socket.emit("lobby:unwatch", { code: lobby.code }); }; }, [socket, lobby?.code]);
@@ -66,7 +67,7 @@ export function App() {
 
   if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
   if (!user) return <AccessView error={error} setError={setError} onAccess={setUser} />;
-  if (game && lobby?.status === "ACTIVE") return <GameView user={user} lobby={lobby} game={game} connected={connected} onGame={setGame} onLeave={leaveLobby} />;
+  if (game && lobby && lobby.status !== "OPEN") return <GameView user={user} lobby={lobby} game={game} connected={connected} onGame={setGame} onLeave={leaveLobby} />;
   if (lobby) return <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} />;
   return <LobbyListView user={user} connected={connected} error={error} setError={setError} onLobby={openLobby} onLogout={logout} />;
 }

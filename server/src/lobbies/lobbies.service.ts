@@ -6,6 +6,7 @@ import { createInitialGameState, toPlayerGameView } from "../game/game-state.js"
 import { PrismaService } from "../prisma.service.js";
 import { CreateLobbyDto } from "./lobby.dto.js";
 import { PresenceService } from "../realtime/presence.service.js";
+import { LobbyLifecycleService } from "./lobby-lifecycle.service.js";
 
 const lobbyInclude = {
   host: { select: { id: true, username: true } },
@@ -15,7 +16,7 @@ const lobbyInclude = {
 
 @Injectable()
 export class LobbiesService {
-  constructor(private readonly prisma: PrismaService, private readonly presence: PresenceService) {}
+  constructor(private readonly prisma: PrismaService, private readonly presence: PresenceService, private readonly lifecycle: LobbyLifecycleService) {}
 
   async create(userId: string, input: CreateLobbyDto) {
     const code = await this.newCode();
@@ -79,6 +80,7 @@ export class LobbiesService {
     const remaining = lobby.players.filter((entry) => entry.userId !== userId);
     if (remaining.length === 0) {
       await this.prisma.lobby.delete({ where: { id: lobby.id } });
+      await this.lifecycle.cancel(lobby.code);
       return { deleted: true as const, code: lobby.code };
     }
     await this.prisma.$transaction([
