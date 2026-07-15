@@ -46,7 +46,7 @@ export class GamesService {
     }
     const updated = await this.prisma.game.updateMany({
       where: { id: game.id, version: game.version, status: "ACTIVE" },
-      data: { state: state as unknown as Prisma.InputJsonValue, version: { increment: 1 } }
+      data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
     });
     if (updated.count !== 1) throw new ConflictException("Der Spielzustand wurde bereits verändert. Bitte erneut versuchen.");
     return { version: game.version + 1, state: toPlayerGameView(state, userId) };

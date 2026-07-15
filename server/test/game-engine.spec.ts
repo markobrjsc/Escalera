@@ -4,6 +4,7 @@ import type { GameCard, GameState } from "../src/game/game-state.js";
 
 const card = (id: string, rank: "3" | "5" | "7" | "8" | "9" | "10", suit: "clubs" | "hearts" | "spades" = "clubs"): GameCard => ({ id, kind: "standard", deck: 1, rank, suit });
 const baseState = (): GameState => ({
+  status: "ACTIVE",
   round: 1,
   phase: 1,
   jokersPerPlayer: 1,
@@ -19,7 +20,8 @@ const baseState = (): GameState => ({
   turn: { hasDrawn: false },
   discardOffer: null,
   roundEndedById: null,
-  roundResults: []
+  roundResults: [],
+  placements: []
 });
 
 describe("autoritärer Spielzug", () => {
@@ -99,5 +101,28 @@ describe("autoritärer Spielzug", () => {
     let call = 0;
     const result = discardCard(state, "p1", "last", (upper) => call++ === 0 ? Math.min(1, upper - 1) : 0);
     expect(result.activePlayerId).toBe("p3");
+  });
+
+  it("beendet Phase 7 nach der Wertung mit geteilten Platzierungen", () => {
+    const state = baseState();
+    state.phase = 7;
+    state.round = 7;
+    state.turn.hasDrawn = true;
+    state.players[0].hand = [card("last", "7")];
+    state.players[0].totalPenalty = 5;
+    state.players[1].hand = [card("p2-eight", "8")];
+    state.players[2].hand = [card("p3-eight", "8")];
+
+    const result = discardCard(state, "p1", "last", () => 0);
+
+    expect(result.status).toBe("FINISHED");
+    expect(result.phase).toBe(7);
+    expect(result.placements).toEqual([
+      { userId: "p1", rank: 1, totalPenalty: 5 },
+      { userId: "p2", rank: 2, totalPenalty: 10 },
+      { userId: "p3", rank: 2, totalPenalty: 10 }
+    ]);
+    expect(() => drawCard(result, "p1", "draw")).toThrow("Partie ist bereits beendet");
+    expect(() => buyDiscard(result, "p2")).toThrow("Partie ist bereits beendet");
   });
 });

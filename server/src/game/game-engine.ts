@@ -13,6 +13,7 @@ function player(state: GameState, userId: string) {
 }
 
 function activePlayer(state: GameState, userId: string) {
+  if (state.status === "FINISHED") throw new GameActionError("Die Partie ist bereits beendet.");
   if (state.roundEndedById) throw new GameActionError("Die Runde ist bereits beendet.");
   if (state.activePlayerId !== userId) throw new GameActionError("Du bist nicht am Zug.");
   return player(state, userId);
@@ -134,7 +135,12 @@ function completeRound(state: GameState, endedById: string, random: (upperExclus
   state.roundResults.push({ round: state.round, phase: state.phase, endedById, scores });
   state.discardOffer = null;
   if (state.phase >= 7) {
+    const totals = [...new Set(state.players.map((entry) => entry.totalPenalty))].sort((a, b) => a - b);
+    state.status = "FINISHED";
     state.roundEndedById = endedById;
+    state.placements = state.players
+      .map((entry) => ({ userId: entry.userId, rank: totals.indexOf(entry.totalPenalty) + 1, totalPenalty: entry.totalPenalty }))
+      .sort((a, b) => a.rank - b.rank || a.userId.localeCompare(b.userId));
     return state;
   }
 
@@ -162,6 +168,7 @@ function completeRound(state: GameState, endedById: string, random: (upperExclus
 
 export function buyDiscard(rawState: GameState, userId: string) {
   const state = normalizeGameState(rawState);
+  if (state.status === "FINISHED") throw new GameActionError("Die Partie ist bereits beendet.");
   if (state.roundEndedById) throw new GameActionError("Die Runde ist bereits beendet.");
   if (!state.discardOffer) throw new GameActionError("Diese Karte steht nicht mehr zum Kauf.");
   if (userId === state.activePlayerId || userId === state.discardOffer.offeredById) throw new GameActionError("Du kannst diese Karte gerade nicht kaufen.");
