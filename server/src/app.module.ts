@@ -16,12 +16,14 @@ import { RealtimeGateway } from "./realtime/realtime.gateway.js";
 import { GamesController } from "./game/games.controller.js";
 import { GamesService } from "./game/games.service.js";
 import { TurnTimerService } from "./game/turn-timer.service.js";
+import { PresenceService } from "./realtime/presence.service.js";
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }])],
   controllers: [HealthController, AuthController, ProfilesController, LobbiesController, GamesController],
   providers: [
     PrismaService,
+    PresenceService,
     AuthService,
     SessionGuard,
     ProfilesService,

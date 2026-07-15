@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, layAdditionalMeld, layPhase } from "../src/game/game-engine.js";
+import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, layAdditionalMeld, layPhase, skipDisconnectedTurn } from "../src/game/game-engine.js";
 import type { GameCard, GameState } from "../src/game/game-state.js";
 
 const card = (id: string, rank: "3" | "5" | "7" | "8" | "9" | "10", suit: "clubs" | "hearts" | "spades" = "clubs"): GameCard => ({ id, kind: "standard", deck: 1, rank, suit });
@@ -11,9 +11,9 @@ const baseState = (): GameState => ({
   maxTurnSeconds: 60,
   activePlayerId: "p1",
   players: [
-    { userId: "p1", hand: [card("5c", "5"), card("5h", "5", "hearts"), card("5s", "5", "spades"), card("7c", "7")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0 },
-    { userId: "p2", hand: [card("8c", "8")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0 },
-    { userId: "p3", hand: [card("9c", "9")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0 }
+    { userId: "p1", hand: [card("5c", "5"), card("5h", "5", "hearts"), card("5s", "5", "spades"), card("7c", "7")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0, disconnectSkips: 0 },
+    { userId: "p2", hand: [card("8c", "8")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0, disconnectSkips: 0 },
+    { userId: "p3", hand: [card("9c", "9")], coins: 7, phaseLaid: false, totalPenalty: 0, timeouts: 0, disconnectSkips: 0 }
   ],
   drawPile: [card("3c", "3")],
   discardPile: [card("10c", "10")],
@@ -143,5 +143,13 @@ describe("autoritärer Spielzug", () => {
     const before = JSON.stringify(state);
     expect(() => expireTurn(state, Date.parse(state.turn.deadlineAt!) - 1, () => 0)).toThrow("noch nicht abgelaufen");
     expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("schließt den Zug eines vollständig getrennten aktiven Spielers automatisch ab", () => {
+    const state = baseState();
+    const skipped = skipDisconnectedTurn(state, "p1", Date.parse(state.turn.deadlineAt!), () => 0);
+    expect(skipped.activePlayerId).toBe("p2");
+    expect(skipped.players[0].disconnectSkips).toBe(1);
+    expect(skipped.players[0].hand).toHaveLength(4);
   });
 });

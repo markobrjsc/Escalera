@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service.js";
-import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, GameActionError, layAdditionalMeld, layPhase } from "./game-engine.js";
+import { addCardToMeld, buyDiscard, discardCard, drawCard, expireTurn, GameActionError, layAdditionalMeld, layPhase, skipDisconnectedTurn } from "./game-engine.js";
 import { normalizeGameState, toPlayerGameView, type GameState } from "./game-state.js";
 
 type LoadedGame = Prisma.GameGetPayload<{ include: { lobby: { include: { players: true } } } }>;
@@ -52,6 +52,18 @@ export class GamesService {
       if (updated.count === 1) changedCodes.push(game.lobby.code);
     }
     return changedCodes;
+  }
+
+  async skipDisconnected(code: string, userId: string, now = Date.now()) {
+    const game = await this.load(code);
+    const current = normalizeGameState(game.state as unknown as GameState);
+    if (current.status === "FINISHED" || current.activePlayerId !== userId) return false;
+    const state = skipDisconnectedTurn(structuredClone(current), userId, now);
+    const updated = await this.prisma.game.updateMany({
+      where: { id: game.id, version: game.version, status: "ACTIVE" },
+      data: { state: state as unknown as Prisma.InputJsonValue, status: state.status, phase: state.phase, version: { increment: 1 } }
+    });
+    return updated.count === 1;
   }
 
   private async mutate(userId: string, code: string, action: (state: GameState, game: LoadedGame) => GameState) {

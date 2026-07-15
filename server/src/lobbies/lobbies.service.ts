@@ -5,6 +5,7 @@ import type { GameState } from "../game/game-state.js";
 import { createInitialGameState, toPlayerGameView } from "../game/game-state.js";
 import { PrismaService } from "../prisma.service.js";
 import { CreateLobbyDto } from "./lobby.dto.js";
+import { PresenceService } from "../realtime/presence.service.js";
 
 const lobbyInclude = {
   host: { select: { id: true, username: true } },
@@ -14,7 +15,7 @@ const lobbyInclude = {
 
 @Injectable()
 export class LobbiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly presence: PresenceService) {}
 
   async create(userId: string, input: CreateLobbyDto) {
     const code = await this.newCode();
@@ -143,7 +144,7 @@ export class LobbiesService {
         streetsRequireSameSuit: lobby.streetsRequireSameSuit,
         confirmTurnEnd: lobby.confirmTurnEnd
       },
-      players: lobby.players.map((player) => ({ user: player.user, ready: player.ready }))
+      players: lobby.players.map((player) => ({ user: player.user, ready: player.ready, connected: this.presence.isConnected(lobby.code, player.userId) }))
     };
   }
 

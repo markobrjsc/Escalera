@@ -140,6 +140,17 @@ export function expireTurn(rawState: GameState, now = Date.now(), random: (upper
   return discardCard(state, userId, discarded.id, random, now);
 }
 
+export function skipDisconnectedTurn(rawState: GameState, userId: string, now = Date.now(), random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper)) {
+  let state = normalizeGameState(rawState);
+  activePlayer(state, userId);
+  if (!state.turn.hasDrawn) state = drawCard(state, userId, "draw", random);
+  const current = player(state, userId);
+  current.disconnectSkips += 1;
+  const discarded = current.hand[random(current.hand.length)];
+  if (!discarded) throw new GameActionError("Für das Überspringen ist keine Handkarte vorhanden.");
+  return discardCard(state, userId, discarded.id, random, now);
+}
+
 function completeRound(state: GameState, endedById: string, random: (upperExclusive: number) => number, now = Date.now()) {
   const scores = state.players.map((entry) => {
     const penalty = handPoints(entry.hand);

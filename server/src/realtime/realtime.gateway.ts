@@ -1,23 +1,27 @@
-import { ConnectedSocket, MessageBody, OnGatewayConnection, SubscribeMessage, WebSocketGateway, WebSocketServer } from "@nestjs/websockets";
+import { ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer } from "@nestjs/websockets";
 import type { Server, Socket } from "socket.io";
 import { AuthService } from "../auth/auth.service.js";
 import { SESSION_COOKIE } from "../auth/auth.types.js";
 import { LobbiesService } from "../lobbies/lobbies.service.js";
+import { GamesService } from "../game/games.service.js";
+import { PresenceService } from "./presence.service.js";
 
 type WatchLobbyPayload = { code?: string };
-type RealtimeSocket = Socket & { data: { userId?: string } };
+type RealtimeSocket = Socket & { data: { userId?: string; watchedCodes?: Set<string> } };
 
 @WebSocketGateway({
   namespace: "/realtime",
   cors: { origin: process.env.CLIENT_ORIGIN ?? false, credentials: true }
 })
-export class RealtimeGateway implements OnGatewayConnection {
+export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
   constructor(
     private readonly auth: AuthService,
-    private readonly lobbies: LobbiesService
+    private readonly lobbies: LobbiesService,
+    private readonly games: GamesService,
+    private readonly presence: PresenceService
   ) {}
 
   async handleConnection(client: RealtimeSocket) {
@@ -28,23 +32,30 @@ export class RealtimeGateway implements OnGatewayConnection {
     client.emit("realtime:connected", { user });
   }
 
+  async handleDisconnect(client: RealtimeSocket) {
+    if (!client.data.userId) return;
+    await Promise.all([...(client.data.watchedCodes ?? [])].map((code) => this.disconnectFromLobby(client, code)));
+  }
+
   @SubscribeMessage("lobby:watch")
   async watchLobby(@ConnectedSocket() client: RealtimeSocket, @MessageBody() input: WatchLobbyPayload) {
     const code = input?.code?.toUpperCase();
     if (!code || !client.data.userId) return;
-    const view = await this.lobbies.getView(client.data.userId, code);
+    await this.lobbies.getView(client.data.userId, code);
+    if (client.data.watchedCodes?.has(code)) return;
     client.join(this.room(code));
     client.join(this.playerRoom(code, client.data.userId));
-    client.emit("lobby:update", view);
-    await this.emitGameToPlayer(code, client.data.userId);
+    client.data.watchedCodes ??= new Set<string>();
+    client.data.watchedCodes.add(code);
+    this.presence.connect(code, client.data.userId, client.id);
+    await this.publishLobby(code);
   }
 
   @SubscribeMessage("lobby:unwatch")
-  unwatchLobby(@ConnectedSocket() client: RealtimeSocket, @MessageBody() input: WatchLobbyPayload) {
+  async unwatchLobby(@ConnectedSocket() client: RealtimeSocket, @MessageBody() input: WatchLobbyPayload) {
     const code = input?.code?.toUpperCase();
     if (!code || !client.data.userId) return;
-    client.leave(this.room(code));
-    client.leave(this.playerRoom(code, client.data.userId));
+    await this.disconnectFromLobby(client, code);
   }
 
   async publishLobby(code: string) {
@@ -59,6 +70,21 @@ export class RealtimeGateway implements OnGatewayConnection {
       this.server.to(this.playerRoom(code, userId)).emit("game:update", game);
     } catch {
       // Vor dem Spielstart gibt es bewusst noch keinen privaten Spielzustand.
+    }
+  }
+
+  private async disconnectFromLobby(client: RealtimeSocket, code: string) {
+    const userId = client.data.userId;
+    if (!userId || !client.data.watchedCodes?.delete(code)) return;
+    client.leave(this.room(code));
+    client.leave(this.playerRoom(code, userId));
+    const fullyDisconnected = this.presence.disconnect(code, userId, client.id);
+    if (!fullyDisconnected) return;
+    try {
+      await this.games.skipDisconnected(code, userId);
+      await this.publishLobby(code);
+    } catch {
+      // Die Lobby kann durch bewusstes Verlassen bereits entfernt worden sein.
     }
   }
 
