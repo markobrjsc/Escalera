@@ -36,6 +36,28 @@ Voraussetzungen: Docker Desktop mit Docker Compose.
 
 Der Verbund startet getrennte Container für Client, Server, PostgreSQL, Redis und lokalen Objektspeicher.
 
+## Entwickeln mit Hot Reload
+
+`docker compose up` baut den Client fest in das nginx-Image ein. Änderungen an Quellcode oder Styles werden dort erst nach einem Neubau sichtbar (`docker compose up -d --build client`); ein blosser Neustart des Containers genügt nicht.
+
+Für die tägliche Arbeit gibt es deshalb ein Entwicklungs-Overlay, das den Client von Vite ausliefern lässt:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+Der Client bleibt unter `http://localhost:8080`. Änderungen an `client/src` sind sofort sichtbar, Styles werden ohne Neuladen der Seite ausgetauscht.
+
+Zurück in den Produktionsmodus:
+
+```powershell
+docker compose up -d --build client
+```
+
+### Wenn Änderungen trotzdem nicht ankommen
+
+Der Produktionsbuild registriert einen Service Worker, der die Anwendung zwischenspeichert. Weil `registerType: "prompt"` gesetzt ist, übernimmt eine neue Version erst, wenn **alle** Tabs dieser Adresse geschlossen wurden — ein normales Neuladen genügt nicht. Sofort erzwingen: DevTools → Application → Service Workers → *Unregister*, danach neu laden. Im Entwicklungs-Overlay wird kein Service Worker registriert.
+
 ## Qualität prüfen
 
 ```powershell
