@@ -1,0 +1,25 @@
+# Entwicklungs-Overlay: Der Client wird von Vite mit Hot Reload ausgeliefert
+# statt aus dem fertig gebauten nginx-Image. Änderungen an Styles und Quellcode
+# sind dadurch sofort sichtbar, ohne Neubau und ohne Neustart.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Der Client bleibt unter http://localhost:8080 erreichbar.
+services:
+  client:
+    # Own image name on purpose: both stages would otherwise tag "escalera-client"
+    # and silently overwrite each other, so a production build would leave the dev
+    # overlay serving nginx instead of Vite.
+    image: escalera-client-dev
+    build:
+      target: dev
+    environment:
+      SERVER_URL: http://server:3000
+      HMR_CLIENT_PORT: "8080"
+      VITE_USE_POLLING: "1"
+    volumes:
+      - ./client/src:/app/client/src
+      - ./client/public:/app/client/public
+      - ./client/index.html:/app/client/index.html
+      - ./client/vite.config.ts:/app/client/vite.config.ts
+      - ./packages:/app/packages
