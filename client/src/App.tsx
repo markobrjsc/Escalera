@@ -32,6 +32,7 @@ type Game = {
     activePlayerId: string;
     drawPileCount: number;
     discardTop: Card | null;
+    discardPileCount: number;
     discardOffer: { available: boolean; cardId: string } | null;
     turn: { hasDrawn: boolean; canAct: boolean; deadlineAt: string | null };
     melds: GameMeld[];
@@ -65,19 +66,22 @@ export function App() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [lobbyRevision, setLobbyRevision] = useState(0);
   const [unlocks, setUnlocks] = useState<AchievementNode[]>([]);
-  const finishHandled = useRef<string | null>(null);
+  const achievementsSeen = useRef<string | null>(null);
 
-  // When a game finishes the server has already written the unlocks, so we fetch
-  // our own tree once and surface any node unlocked in the last 30s as a toast.
+  // The server writes unlocks both at game end and the moment a round is won, so
+  // we refetch our own tree on either event and toast anything freshly unlocked.
   useEffect(() => {
-    if (!user || game?.state.status !== "FINISHED" || !lobby) return;
-    const marker = `${lobby.code}-${game.version}`;
-    if (finishHandled.current === marker) return;
-    finishHandled.current = marker;
+    if (!user || !lobby || !game) return;
+    const finished = game.state.status === "FINISHED";
+    const round = game.state.lastRoundResult?.round;
+    if (!finished && round === undefined) return;
+    const marker = `${lobby.code}-${finished ? "final" : `round-${round}`}`;
+    if (achievementsSeen.current === marker) return;
+    achievementsSeen.current = marker;
     api<ProfileStatistics>(`/profile/users/${user.id}`)
       .then((profile) => setUnlocks(profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlockedAt !== null && Date.now() - Date.parse(node.unlockedAt) < 30_000)))
       .catch(() => undefined);
-  }, [game?.state.status, game?.version, lobby?.code, user?.id]);
+  }, [game?.state.status, game?.state.lastRoundResult?.round, lobby?.code, user?.id]);
 
   useEffect(() => {
     api<{ user: User }>("/auth/me").then(async (result) => {
@@ -232,7 +236,7 @@ function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, on
   const targets = useMemo(() => new Set<string>([...(canDraw ? ["draw", ...(game.state.discardTop ? ["discard"] : [])] : []), ...(canDiscard ? ["discard"] : []), ...(canLay ? ["meldzone"] : []), ...openMelds.map((id) => `meld:${id}`)]), [canDraw, canDiscard, canLay, openMelds, game.state.discardTop]);
 
   useEffect(() => setSelected((current) => current.filter((id) => game.state.ownHand.some((card) => card.id === id))), [game.state.ownHand]);
-  useEffect(() => { const key = `escalera-deal-${lobby.code}-${game.state.round}`; if (game.state.round === 1 && game.state.ownHand.length >= 11 && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); setDealing(true); const timer = window.setTimeout(() => setDealing(false), reduced ? 0 : 3600); return () => window.clearTimeout(timer); } }, [game.state.ownHand.length, game.state.round, lobby.code, reduced]);
+  useEffect(() => { const key = `escalera-deal-${lobby.code}-${game.state.round}`; if (game.state.round === 1 && game.state.ownHand.length >= 11 && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); setDealing(true); const timer = window.setTimeout(() => setDealing(false), reduced ? 0 : dealDurationMs(game.state.players.length)); return () => window.clearTimeout(timer); } }, [game.state.ownHand.length, game.state.round, lobby.code, reduced]);
 
   // Animations are keyed by commandId, so a replayed realtime event or a
   // reconnect re-render never animates the same action twice. The first state
@@ -288,7 +292,9 @@ function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, on
     const originX = event.clientX; const originY = event.clientY; let live = false;
     const zoneAt = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest("[data-zone]") as HTMLElement | null)?.dataset.zone ?? null;
     const move = (moveEvent: PointerEvent) => {
-      if (!live && Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < 8) return;
+      // Only start dragging (and apply the dragged style) past a ~10px threshold,
+      // so a small jitter on click never reads as a drag.
+      if (!live && Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < 10) return;
       if (!live) { live = true; setSelected((current) => current.includes(card.id) ? current : [card.id]); }
       const zone = zoneAt(moveEvent.clientX, moveEvent.clientY);
       setDrag({ cardId: card.id, x: moveEvent.clientX, y: moveEvent.clientY, zone });
@@ -318,19 +324,19 @@ function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, on
     <p className="turn-hint" aria-live="polite">{hint}</p>
     <section className="game-board">
       <div className="pile-station">
-        <button ref={anchor("draw")} className={`game-pile draw-pile ${zoneClass("draw")}`} data-zone="draw" aria-label={`Vom Stapel ziehen, ${game.state.drawPileCount} Karten verbleiben`} disabled={!canDraw} onClick={() => runZone("draw")}><img src={CARD_BACK} alt="" /><strong className="pile-count">{game.state.drawPileCount}</strong></button>
-        <span>Ziehstapel</span>
+        <div className={`pile-slot ${zoneClass("draw")}`}><button ref={anchor("draw")} className="game-pile draw-pile" data-zone="draw" style={{ "--pile-depth": game.state.drawPileCount } as React.CSSProperties} aria-label={`Vom Stapel ziehen, ${game.state.drawPileCount} Karten verbleiben`} disabled={!canDraw} onClick={() => runZone("draw")}><img src={CARD_BACK} alt="" /></button></div>
+        <span>Ziehstapel <b>[ {game.state.drawPileCount} ]</b></span>
       </div>
       <div className={`meld-zone ${zoneClass("meldzone")}`} ref={anchor("meldzone")} data-zone="meldzone" onClick={() => canLay && runZone("meldzone")}>
         {game.state.melds.length ? game.state.melds.map((meld) => <article className={`meld-card ${openMelds.includes(meld.id) ? "is-target" : ""}`} data-zone={`meld:${meld.id}`} ref={anchor(`meld:${meld.id}`)} onClick={(event) => { event.stopPropagation(); runZone(`meld:${meld.id}`); }} key={meld.id} aria-label={`${meld.type === "group" ? "Gruppe" : "Straße"}: ${meld.cards.map(cardLabel).join(", ")}`}><div className="meld-cards" style={{ "--meld-count": meld.cards.length } as React.CSSProperties}>{meld.cards.map((card) => <CardFace card={card} key={card.id} />)}</div></article>) : <div className="empty-meld"><span className="empty-meld-icon">◇</span><strong>Meld-Zone</strong><span>Gruppen und Straßen erscheinen hier</span></div>}
       </div>
       <div className="pile-station">
-        <button ref={anchor("discard")} className={`game-pile discard-pile ${zoneClass("discard")}`} data-zone="discard" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : game.state.discardTop ? `${cardLabel(game.state.discardTop)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}>{game.state.discardTop ? <CardFace card={game.state.discardTop} /> : <strong>Leer</strong>}<strong className="pile-count">{game.state.discardTop ? 1 : 0}</strong></button>
-        <span>Ablage</span>
+        <div className={`pile-slot ${zoneClass("discard")}`}><button ref={anchor("discard")} className="game-pile discard-pile" data-zone="discard" style={{ "--pile-depth": game.state.discardPileCount } as React.CSSProperties} aria-label={canDiscard ? "Ausgewählte Karte ablegen" : game.state.discardTop ? `${cardLabel(game.state.discardTop)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}>{game.state.discardTop ? <CardFace card={game.state.discardTop} /> : <strong className="pile-empty">Leer</strong>}</button></div>
+        <span>Ablage <b>[ {game.state.discardPileCount} ]</b></span>
         {game.state.discardOffer && <button className="buy-button" disabled={busy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}
       </div>
     </section>
-    <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{hand.map((card) => <button type="button" onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""}`} style={{ "--card-count": hand.length } as React.CSSProperties} key={card.id}><CardFace card={card} /></button>)}</div></section>
+    <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{hand.map((card, index) => <button type="button" onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""}`} style={{ "--card-count": hand.length, "--card-index": index } as React.CSSProperties} key={card.id}><span className="card-3d"><CardFace card={card} /></span></button>)}</div></section>
     <nav className="game-nav" aria-label="Spielnavigation"><button className="game-nav-button" aria-label="Spielmenü öffnen" onClick={() => setMenu(true)}>☰ <span>Menü</span></button></nav>
     <GameStatusBar connected={connected} />
     <div className="game-events" aria-live="polite">{events.map((event) => <span className="game-event" key={event.key}>{event.text}</span>)}</div>
@@ -384,8 +390,35 @@ function SignalIcon({ online }: { online: boolean }) {
   return <svg className={`signal-icon ${online ? "online" : ""}`} viewBox="0 0 16 13" aria-hidden="true" focusable="false"><path d="M1 4.2a10.5 10.5 0 0 1 14 0" /><path d="M3.6 7.2a6.8 6.8 0 0 1 8.8 0" /><path d="M6.2 10.1a3 3 0 0 1 3.6 0" /></svg>;
 }
 
+// Deal choreography: the deck slides in from the left, riffle-shuffles twice,
+// then one card at a time flies to each seat (opponents to the top, own cards to
+// the hand below). The deck slides to the draw slot and a first card flips onto
+// the discard. Timings here mirror the keyframe schedule in views.css.
+const DEAL_START = 2300; // ms: dealing begins after slide-in (.9s) + shuffle (~1.3s)
+const DEAL_STEP = 95;    // ms between consecutive cards — slow enough to follow each
+// Total run time for a deal, so the caller knows when to unmount the overlay.
+function dealDurationMs(playerCount: number) { return DEAL_START + playerCount * 11 * DEAL_STEP + 200 + 700 + 1000; }
 function DealAnimation({ players, selfId }: { players: Array<{ userId: string }>; selfId: string }) {
-  return <div className="deal-animation" aria-hidden="true"><img className="deal-deck" src={CARD_BACK} alt="" />{players.flatMap((player, playerIndex) => Array.from({ length: 11 }, (_, cardIndex) => { const isSelf = player.userId === selfId; return <img className={`deal-card ${isSelf ? "to-self" : "to-opponent"}`} src={CARD_BACK} alt="" style={{ "--deal-delay": `${(playerIndex * 11 + cardIndex) * 38}ms`, "--target-x": isSelf ? `${(cardIndex - 5) * 3.1}vw` : `${-38 + playerIndex * 15 + (cardIndex - 5) * .18}vw`, "--target-y": isSelf ? "43vh" : "-38vh", "--target-r": `${(cardIndex - 5) * 1.5}deg` } as React.CSSProperties} key={`${player.userId}-${cardIndex}`} />; }))}<img className="deal-rest-deck" src={CARD_BACK} alt="" /><img className="deal-first-discard" src="/cards/5C.svg" alt="" /></div>;
+  const opponents = players.filter((player) => player.userId !== selfId);
+  const seatX = (userId: string) => { const index = opponents.findIndex((player) => player.userId === userId); return opponents.length ? -30 + index * (60 / Math.max(1, opponents.length - 1 || 1)) : 0; };
+  const dealEnd = DEAL_START + players.length * 11 * DEAL_STEP;
+  const deckSlotDelay = dealEnd + 200;
+  const discardDelay = deckSlotDelay + 700;
+  return <div className="deal-animation" aria-hidden="true" style={{ "--deck-slot-delay": `${deckSlotDelay}ms`, "--discard-delay": `${discardDelay}ms` } as React.CSSProperties}>
+    <img className="deal-deck" src={CARD_BACK} alt="" />
+    <img className="deal-half deal-half-a" src={CARD_BACK} alt="" />
+    <img className="deal-half deal-half-b" src={CARD_BACK} alt="" />
+    {players.flatMap((player, playerIndex) => Array.from({ length: 11 }, (_, cardIndex) => {
+      const isSelf = player.userId === selfId;
+      return <img className={`deal-card ${isSelf ? "to-self" : "to-opponent"}`} src={CARD_BACK} alt="" style={{
+        "--deal-delay": `${DEAL_START + (cardIndex * players.length + playerIndex) * DEAL_STEP}ms`,
+        "--target-x": isSelf ? `${(cardIndex - 5) * 3.2}vw` : `${seatX(player.userId) + (cardIndex - 5) * .15}vw`,
+        "--target-y": isSelf ? "40vh" : "-33vh",
+        "--target-r": `${(cardIndex - 5) * (isSelf ? 1.6 : 0.4)}deg`
+      } as React.CSSProperties} key={`${player.userId}-${cardIndex}`} />;
+    }))}
+    <img className="deal-first-discard" src="/cards/5C.svg" alt="" />
+  </div>;
 }
 
 function Scoreboard({ game, lobby, onClose }: { game: Game; lobby: Lobby; onClose: () => void }) {
@@ -593,7 +626,7 @@ function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: (user: 
     } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
   };
   const current = TUTORIAL_STEPS[step];
-  return <div className="dialog-backdrop tutorial-backdrop"><section className="surface dialog tutorial-dialog"><p className="overline">Kurzanleitung · {step + 1}/{TUTORIAL_STEPS.length}</p><div className="tutorial-suits" aria-hidden="true">♠ <span>♥</span> ♣ <span>♦</span></div><h2>{current.title}</h2><p>{current.text}</p><div className="tutorial-progress">{TUTORIAL_STEPS.map((_, index) => <span className={index === step ? "is-current" : ""} key={index} />)}</div>{error && <p className="error" role="alert">{error}</p>}<div className="tutorial-actions"><button className="button-quiet" disabled={busy} onClick={() => void finish()}>Überspringen</button>{step > 0 && <button disabled={busy} onClick={() => setStep(step - 1)}>Zurück</button>}<button className="button-primary" disabled={busy} onClick={() => step === TUTORIAL_STEPS.length - 1 ? void finish() : setStep(step + 1)}>{step === TUTORIAL_STEPS.length - 1 ? "Losspielen" : "Weiter"}</button></div></section></div>;
+  return <div className="dialog-backdrop tutorial-backdrop"><section className="surface dialog tutorial-dialog"><p className="overline">Kurzanleitung · {step + 1}/{TUTORIAL_STEPS.length}</p><div className="tutorial-suits" aria-hidden="true">♠ <span>♥</span> ♣ <span>♦</span></div><h2>{current.title}</h2><p>{current.text}</p><div className="tutorial-progress">{TUTORIAL_STEPS.map((_, index) => <span className={index === step ? "is-current" : ""} key={index} />)}</div>{error && <p className="error" role="alert">{error}</p>}<div className="tutorial-actions"><button className="button-quiet" disabled={busy} onClick={() => void finish()}>Überspringen</button>{step > 0 && <button disabled={busy} onClick={() => setStep(step - 1)}>Zurück</button>}<button className="button-primary" disabled={busy} onClick={() => step === TUTORIAL_STEPS.length - 1 ? void finish() : setStep(step + 1)}>{step === TUTORIAL_STEPS.length - 1 ? "Losspielen" : "Einloggen"}</button></div></section></div>;
 }
 
 function Avatar({ user, large = false, onClick }: { user: Pick<User, "id" | "username" | "avatarKey">; large?: boolean; onClick?: () => void }) {

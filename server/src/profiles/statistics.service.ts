@@ -81,6 +81,21 @@ export class StatisticsService {
     return true;
   }
 
+  // Grants the phase-win node the moment a player goes out, rather than waiting
+  // for the whole game to finish. recordFinishedGame later ORs the same bit, so
+  // this stays consistent and never double-grants (existing rows are skipped).
+  async recordPhaseWin(userId: string, phase: number) {
+    const bit = 1 << (phase - 1);
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.userStatistic.findUnique({ where: { userId } });
+      const mask = (before?.phaseWinsMask ?? 0) | bit;
+      await tx.userStatistic.upsert({ where: { userId }, create: { userId, phaseWinsMask: mask }, update: { phaseWinsMask: mask } });
+      const id = `phases:${phase}`;
+      const exists = await tx.achievementProgress.findUnique({ where: { userId_achievement: { userId, achievement: id } } });
+      if (!exists) await tx.achievementProgress.create({ data: { userId, achievement: id, progress: 1, unlockedAt: new Date() } });
+    });
+  }
+
   async profile(userId: string) {
     const [stored, progress] = await Promise.all([
       this.prisma.userStatistic.findUnique({ where: { userId } }),

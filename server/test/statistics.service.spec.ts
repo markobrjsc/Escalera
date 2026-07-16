@@ -54,6 +54,18 @@ describe("dauerhafte Statistiken", () => {
     expect(created).not.toContain("streets:10"); // longestStreet is only 9
   });
 
+  it("gewährt einen Phasengewinn sofort und nur einmal", async () => {
+    const created: { achievement: string }[] = [];
+    const tx = {
+      userStatistic: { findUnique: vi.fn(async () => ({ phaseWinsMask: 0b0000001 })), upsert: vi.fn() },
+      achievementProgress: { findUnique: vi.fn(async () => null), create: vi.fn(async (arg: { data: { achievement: string } }) => created.push(arg.data)) }
+    };
+    const prisma = { $transaction: vi.fn(async (work: (client: typeof tx) => Promise<void>) => work(tx)) };
+    await new StatisticsService(prisma as never).recordPhaseWin("p1", 3);
+    expect(tx.userStatistic.upsert.mock.calls[0][0].update.phaseWinsMask).toBe(0b0000101); // phase 1 kept, phase 3 added
+    expect(created).toEqual([{ userId: "p1", achievement: "phases:3", progress: 1, unlockedAt: expect.any(Date) }]);
+  });
+
   it("baut den Baum ausschließlich aus Serverwerten", async () => {
     const prisma = {
       userStatistic: { findUnique: vi.fn(async () => ({ gamesWon: 3, cardsBought: 25, totalPenalty: 550, movesPlayed: 120, coinPenalty: 300, longestStreet: 5, phaseWinsMask: 0b0000101 })) },
