@@ -78,20 +78,154 @@
 .member-card { display: grid; min-height: clamp(3.3rem, 9dvh, 4.25rem); grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); border: 2px solid currentColor; padding: .45rem .65rem; background: var(--color-jet); }.member-card > div { display: grid; }.member-card > div span { color: var(--color-muted); font-size: var(--font-xs); }.member-card.is-ready { color: var(--color-ready); }.member-card.is-waiting { color: var(--color-waiting); }.member-card.is-offline { border-style: dashed; opacity: .62; }.member-card strong { color: var(--color-white); }.member-state { font-size: var(--font-xs); font-weight: 900; }
 .lobby-actions { display: grid; width: min(100%, 30rem); grid-template-columns: repeat(2, minmax(0, 1fr)); justify-self: center; gap: clamp(1rem, 6vw, 2.5rem); }
 
-.game-view { position: relative; display: grid; grid-template-rows: minmax(3.5rem, 20dvh) minmax(0, 1fr) minmax(5rem, 29dvh); gap: .35rem; }
-.game-top { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-2); }
-.opponent-row { display: flex; min-width: 0; height: 100%; align-items: start; justify-content: flex-end; gap: var(--space-1); overflow-x: auto; }
-.opponent-card { display: grid; flex: 0 1 clamp(7.5rem, 16vw, 11rem); min-width: 7.5rem; height: 74%; grid-template-columns: auto minmax(0, 1fr); align-content: center; align-items: center; gap: .35rem; border: 1px solid var(--color-white); padding: .35rem .55rem; background: var(--color-jet); font-size: var(--font-xs); }.opponent-card > div { display: grid; min-width: 0; }.opponent-card .profile-icon { width: clamp(1.8rem, 4vmin, 2.5rem); }.opponent-card span { overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; white-space: nowrap; }.opponent-card.is-active { flex-basis: clamp(9rem, 20vw, 13rem); height: 100%; border: 3px solid var(--color-teal); color: var(--color-white); }.opponent-card.is-offline { border-style: dashed; opacity: .62; }
-.game-board { display: grid; min-height: 0; grid-template-columns: clamp(4.2rem, 10vw, 7rem) minmax(0, 1fr) clamp(4.2rem, 10vw, 7rem); align-items: center; gap: var(--space-2); }
-.game-pile { position: relative; display: grid; width: 100%; min-height: 2.75rem; aspect-ratio: .72; place-content: center; overflow: hidden; border: var(--border); padding: 0; background: var(--color-jet); text-align: center; font-size: var(--font-xs); }.game-pile > img { width: 100%; height: 100%; object-fit: cover; }.game-pile strong { position: absolute; right: .2rem; bottom: .15rem; border-radius: 999px; padding: .1rem .3rem; background: var(--color-onyx); color: var(--color-white); font-size: var(--font-sm); }.discard-pile { background: var(--color-white); color: var(--color-onyx); }.game-pile:disabled { opacity: .72; }
-.card-back { display: grid; width: calc(100% - .45rem); height: calc(100% - .45rem); place-items: center; border: 3px double var(--color-white); background: repeating-linear-gradient(45deg, var(--color-teal) 0 4px, var(--color-onyx) 4px 8px); color: var(--color-white); font-family: var(--font-display); font-size: clamp(1.2rem, 4vw, 2.4rem); }
-.discard-area { position: relative; display: grid; width: 100%; place-items: center; }.buy-button { position: absolute; bottom: .25rem; min-height: 1.55rem; border-color: var(--color-teal); padding: .1rem .35rem; background: var(--color-onyx); font-size: clamp(.55rem, 1.45vmin, .72rem); white-space: nowrap; }
-.meld-zone { display: grid; height: 100%; grid-template-columns: repeat(2, minmax(6rem, 1fr)); gap: var(--space-1); overflow: auto; border: 1px dashed var(--color-teal); padding: var(--space-1); }.empty-meld { grid-column: 1 / -1; place-self: center; color: var(--color-muted); font-size: var(--font-sm); text-transform: uppercase; }
-.meld-card { display: grid; min-height: 3rem; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .3rem; border: 1px solid var(--color-white); padding: .3rem; background: var(--color-onyx); font-size: var(--font-xs); }.meld-card > div { display: grid; min-width: 0; }.meld-card span { overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; white-space: nowrap; }.meld-card button { min-height: 2.75rem; padding: 0 .35rem; font-size: var(--font-xs); }.meld-card-images { display: flex; height: 2rem; overflow: hidden; }.meld-card-images .card-face { width: 1.45rem; margin-right: -.35rem; object-fit: cover; object-position: top; }
-.player-hand { position: relative; min-height: 0; overflow: visible; text-align: center; }.hand-toolbar { position: relative; z-index: 4; display: flex; min-width: 0; align-items: center; justify-content: center; gap: var(--space-1); }.turn-label { display: inline-block; flex: 0 0 auto; border: 1px solid var(--color-teal); padding: .15rem .55rem; background: var(--color-onyx); font-size: var(--font-xs); font-weight: 900; text-transform: uppercase; }.turn-countdown { display: inline-grid; min-width: 2.6rem; min-height: 1.7rem; place-items: center; border: 1px solid var(--color-teal); background: var(--color-jet); font-size: var(--font-xs); font-weight: 900; }.turn-countdown.is-urgent { border-color: var(--color-danger); color: var(--color-danger); }.turn-actions { display: flex; gap: .25rem; }.turn-actions button { min-height: clamp(1.7rem, 5dvh, 2.3rem); padding: 0 .55rem; font-size: var(--font-xs); }.game-error { max-width: 30vw; overflow: hidden; color: var(--color-danger); font-size: var(--font-xs); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-.hand-cards { position: absolute; inset: 2.25rem 5% auto; display: flex; width: 90%; justify-content: center; overflow: visible; perspective: 50rem; }
-.playing-card { flex: 0 1 clamp(3.2rem, 7.7vw, 5.4rem); min-width: 2.35rem; height: clamp(5rem, 20dvh, 8rem); margin-left: clamp(-1.35rem, -2vw, -.6rem); transform: translateY(var(--card-lift, .3rem)) rotate(calc((var(--card-index) - 5) * 1.2deg)); transform-origin: 50% 110%; overflow: hidden; border: 2px solid var(--color-onyx); border-radius: var(--radius-sm); padding: 0; background: var(--color-white); color: var(--color-onyx); }.playing-card:first-child { margin-left: 0; }.playing-card.is-selected { --card-lift: -.55rem; z-index: 2; border-color: var(--color-teal); box-shadow: 0 0 0 2px var(--color-white); }.playing-card:focus-visible { z-index: 3; outline: 3px solid var(--color-teal); outline-offset: 2px; }.card-face { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
-.game-menu { position: fixed; inset: 0 auto 0 0; z-index: 60; display: grid; width: min(78vw, 22rem); grid-template-rows: auto repeat(4, auto) 1fr auto; gap: var(--space-2); padding: var(--space-3); }.leave-game { align-self: end; }
+/* Gamefield — flat, black and sharp-edged like every other view; no gradients,
+   no soft radii. Sized from two units so the board scales as one piece:
+   --u is proportional to the viewport (height leads; .55vw takes over on stubby
+   ones so the HUD can never overflow sideways). --fu is deliberately sub-linear
+   in --u, because type scaled 1:1 off a good desktop is illegible at 350px tall.
+   The hand anchors the vertical layout: padding-bottom reserves the visible 75%
+   of a card and the hand is pulled down by the other 25%, so a card's top edge
+   always lands exactly on the board's bottom edge, at every size. */
+.game-view {
+  --u: clamp(2.6px, min(1dvh, .55vw), 12px);
+  --fu: calc(4.1px + .43 * var(--u));
+  --t-xs: calc(1.3 * var(--fu));
+  --t-sm: calc(1.6 * var(--fu));
+  --t-md: calc(1.95 * var(--fu));
+  --t-lg: calc(2.95 * var(--fu));
+  --ctrl: calc(4 * var(--fu));
+  --gap: calc(1.6 * var(--u));
+  --edge: calc(2 * var(--u));
+  --hair: max(1px, calc(.12 * var(--u)));
+  --line: max(2px, calc(.18 * var(--u)));
+  --card-h: calc(26 * var(--u));
+  --card-w: calc(var(--card-h) * 5 / 7);
+  --hand-span: 75vw;
+  --hand-visible: calc(.75 * var(--card-h));
+  --side-lane: calc(50vw - var(--hand-span) / 2 - 2 * var(--edge));
+  position: relative;
+  display: grid;
+  height: 100dvh;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: calc(.6 * var(--u));
+  overflow: hidden;
+  padding: max(var(--edge), env(safe-area-inset-top)) max(var(--edge), env(safe-area-inset-right)) var(--hand-visible) max(var(--edge), env(safe-area-inset-left));
+  background: var(--color-onyx);
+  isolation: isolate;
+}
+.game-view.is-dragging { cursor: grabbing; }
+
+.game-hud { position: relative; z-index: 8; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; gap: var(--gap); }
+.hud-kicker { color: var(--color-teal); font-size: var(--t-xs); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.turn-order { display: grid; max-height: calc(23 * var(--u)); grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(19 * var(--u))), 1fr)); align-content: start; gap: calc(.45 * var(--u)) calc(.7 * var(--u)); overflow: hidden; }
+.turn-order > .hud-kicker { grid-column: 1 / -1; }
+.turn-order-player { display: grid; min-width: 0; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: calc(.5 * var(--u)); border: var(--hair) solid var(--color-muted); border-radius: var(--radius-sm); padding: calc(.3 * var(--u)) calc(.5 * var(--u)); font-size: var(--t-xs); }
+.turn-order-player .turn-position { color: var(--color-teal); font-weight: 900; }
+.turn-order-player .profile-icon { width: calc(4.4 * var(--u)); border-width: var(--hair); font-size: var(--t-xs); }
+.turn-order-player > div { display: grid; min-width: 0; }
+.turn-order-player strong, .turn-order-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turn-order-player > div span { color: var(--color-muted); font-size: calc(1.15 * var(--fu)); }
+.turn-order-player.is-offline { border-style: dashed; opacity: .5; }
+.active-player-hud { position: relative; display: grid; width: min(100%, calc(56 * var(--u))); grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; justify-self: center; gap: calc(1.1 * var(--u)); border: var(--line) solid var(--color-white); border-radius: var(--radius-sm); padding: calc(.5 * var(--u)) calc(.9 * var(--u)); }
+.active-player-hud.is-self { border-color: var(--color-ready); }
+.active-player-hud .profile-icon { width: calc(6.6 * var(--u)); border-width: var(--hair); font-size: var(--t-md); }
+.active-player-hud > div { display: grid; min-width: 0; }
+.active-player-hud strong { overflow: hidden; font-family: var(--font-display); font-size: var(--t-lg); letter-spacing: .02em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.active-player-hud > div > span:not(.hud-kicker) { overflow: hidden; color: var(--color-muted); font-size: var(--t-xs); text-overflow: ellipsis; white-space: nowrap; }
+.turn-countdown { display: inline-grid; min-width: calc(4.6 * var(--u)); min-height: var(--ctrl); place-items: center; border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: calc(.4 * var(--u)); font-size: var(--t-sm); font-weight: 900; }
+.turn-countdown.is-urgent { border-color: var(--color-danger); color: var(--color-danger); animation: urgent-pulse 1s steps(2, end) infinite; }
+.phase-hud { display: grid; justify-self: end; gap: calc(.15 * var(--u)); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding: calc(.45 * var(--u)) calc(.8 * var(--u)); text-align: right; }
+.phase-hud strong { font-family: var(--font-display); font-size: var(--t-lg); letter-spacing: .04em; white-space: nowrap; text-transform: uppercase; }
+.phase-hud > span:last-child { color: var(--color-muted); font-size: var(--t-xs); white-space: nowrap; }
+.turn-hint { z-index: 8; margin: 0; color: var(--color-ready); font-size: var(--t-xs); font-weight: 800; letter-spacing: .06em; text-align: center; text-transform: uppercase; }
+
+.game-board { display: grid; min-height: 0; grid-template-columns: var(--card-w) minmax(0, 1fr) var(--card-w); gap: var(--gap); }
+.pile-station { display: grid; align-self: center; min-width: 0; justify-items: center; gap: calc(.4 * var(--u)); color: var(--color-muted); font-size: var(--t-xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.game-pile { position: relative; display: grid; width: 100%; min-width: 0; min-height: 0; aspect-ratio: 5 / 7; place-content: center; overflow: hidden; border: var(--line) solid var(--color-white); border-radius: var(--radius-sm); padding: 0; background: var(--color-jet); text-align: center; font-size: var(--t-xs); }
+.game-pile > img { width: 100%; height: 100%; object-fit: cover; }
+.game-pile:disabled { cursor: default; opacity: .5; }
+.discard-pile { background: var(--color-white); color: var(--color-onyx); }
+.pile-count { position: absolute; right: calc(.3 * var(--u)); bottom: calc(.3 * var(--u)); z-index: 2; min-width: calc(2.4 * var(--u)); border: var(--hair) solid var(--color-white); border-radius: var(--radius-sm); padding: calc(.1 * var(--u)) calc(.3 * var(--u)); background: var(--color-onyx); color: var(--color-white); font-size: var(--t-xs); }
+.buy-button { min-width: 0; min-height: var(--ctrl); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: calc(.7 * var(--u)); color: var(--color-teal); font-size: var(--t-xs); white-space: nowrap; }
+
+/* The meld zone is a plain area: only the cards themselves carry any chrome. */
+.meld-zone { display: grid; height: 100%; min-height: 0; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(38 * var(--u))), 1fr)); grid-auto-rows: calc(15 * var(--u)); align-content: start; gap: var(--gap); overflow-y: auto; overscroll-behavior: contain; border: var(--hair) dashed #52796f55; border-radius: var(--radius-sm); padding: var(--gap); background: transparent; scrollbar-width: none; }
+.meld-zone::-webkit-scrollbar { display: none; }
+.meld-zone:has(> .empty-meld) { grid-auto-rows: minmax(0, 1fr); }
+.empty-meld { display: grid; grid-column: 1 / -1; place-content: center; justify-items: center; gap: calc(.2 * var(--u)); color: var(--color-muted); text-align: center; text-transform: uppercase; }
+.empty-meld-icon { color: var(--color-teal); font-size: calc(6 * var(--fu)); }
+.empty-meld strong { color: var(--color-white); font-family: var(--font-display); font-size: var(--t-md); letter-spacing: .04em; }
+.empty-meld > span:last-child { font-size: var(--t-xs); }
+.meld-card { display: grid; min-width: 0; min-height: 0; align-items: center; border: var(--hair) solid transparent; border-radius: var(--radius-sm); padding: calc(.3 * var(--u)); background: transparent; cursor: default; }
+/* Cards sit flush left with a small gap; when the row runs out of room the gap
+   goes negative on its own and they overlap instead of shrinking. */
+.meld-cards { --face-h: calc(12 * var(--u)); --face-w: calc(var(--face-h) * 5 / 7); display: flex; min-width: 0; align-items: center; justify-content: flex-start; }
+.meld-cards .card-face { width: var(--face-w); height: var(--face-h); flex: 0 0 auto; margin-right: min(calc(.5 * var(--u)), calc((100% - var(--meld-count) * var(--face-w)) / max(1, var(--meld-count) - 1))); border: var(--hair) solid var(--color-onyx); border-radius: var(--radius-sm); object-fit: cover; }
+.meld-cards .card-face:last-child { margin-right: 0; }
+
+/* Only rule-valid targets light up; anything else refuses without sending. */
+.is-target { border-color: var(--color-ready) !important; box-shadow: 0 0 0 var(--hair) var(--color-ready); animation: target-pulse 1.5s ease-in-out infinite; }
+.meld-card.is-target { border-color: var(--color-ready) !important; }
+.is-refused { border-color: var(--color-danger) !important; animation: none; }
+
+/* --card-count is set per card in App.tsx, so the overlap that makes the hand
+   span exactly --hand-span has to be solved here, on the card itself. */
+.player-hand { position: absolute; z-index: 12; left: calc(50vw - var(--hand-span) / 2); bottom: calc(-.25 * var(--card-h)); width: var(--hand-span); height: var(--card-h); overflow: visible; pointer-events: none; }
+.hand-cards { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; overflow: visible; pointer-events: auto; }
+.playing-card { --card-step: min(var(--card-w), calc((var(--hand-span) - var(--card-w)) / max(1, var(--card-count, 11) - 1))); flex: 0 0 auto; width: var(--card-w); height: var(--card-h); min-width: 0; min-height: 0; margin-left: calc(var(--card-step) - var(--card-w)); transform: translateY(var(--card-lift, 0px)); overflow: hidden; border: var(--line) solid var(--color-onyx); border-radius: var(--radius-sm); padding: 0; background: var(--color-white); touch-action: none; transition: transform .16s ease, border-color .16s ease; }
+.playing-card:first-child { margin-left: 0; }
+.playing-card:hover, .playing-card:active { --card-lift: calc(-1.2 * var(--u)); z-index: 100; transform: translateY(var(--card-lift)); border-color: var(--color-teal); }
+.playing-card:focus-visible { z-index: 102; outline: var(--line) solid var(--color-teal); outline-offset: calc(.15 * var(--u)); }
+.playing-card.is-selected { --card-lift: calc(-3 * var(--u)); z-index: 101; border-color: var(--color-ready); }
+.playing-card.is-dragged { opacity: .35; }
+.card-face { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
+
+.drag-ghost { position: fixed; z-index: 90; width: var(--card-w); height: var(--card-h); overflow: hidden; border: var(--line) solid var(--color-ready); border-radius: var(--radius-sm); background: var(--color-white); transform: translate(-50%, -50%) rotate(-3deg); pointer-events: none; }
+.flight-layer { position: fixed; inset: 0; z-index: 88; overflow: hidden; pointer-events: none; }
+.flight-card { position: absolute; top: 0; left: 0; overflow: hidden; border: var(--line) solid var(--color-onyx); border-radius: var(--radius-sm); transform-origin: top left; object-fit: cover; will-change: transform, opacity; }
+
+.game-nav { position: absolute; z-index: 20; left: max(var(--edge), env(safe-area-inset-left)); bottom: max(var(--edge), env(safe-area-inset-bottom)); display: flex; max-width: var(--side-lane); gap: calc(.5 * var(--u)); }
+.game-nav-button { min-width: 0; min-height: var(--ctrl); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: var(--u); font-size: var(--t-xs); }
+.game-nav-button > span { margin-left: calc(.35 * var(--u)); }
+.menu-sort { display: grid; gap: var(--space-1); }
+.menu-sort .sort-control { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1); }
+.menu-sort .sort-control button { min-height: var(--control-height); border-color: var(--color-muted); }
+.menu-sort .sort-control button.is-active { border-color: var(--color-teal); background: var(--color-teal); }
+
+.game-status-bar { position: absolute; z-index: 20; right: max(var(--edge), env(safe-area-inset-right)); bottom: max(var(--edge), env(safe-area-inset-bottom)); display: flex; max-width: var(--side-lane); min-height: var(--ctrl); align-items: center; gap: calc(.6 * var(--u)); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: calc(.7 * var(--u)); color: var(--color-muted); font-size: var(--t-xs); font-weight: 800; white-space: nowrap; }
+.signal-icon { width: calc(2.6 * var(--u)); height: auto; aspect-ratio: 16 / 13; fill: none; stroke: var(--color-danger); stroke-width: 1.6; stroke-linecap: round; }
+.signal-icon.online { stroke: var(--color-ready); }
+.game-events { position: absolute; z-index: 22; right: max(var(--edge), env(safe-area-inset-right)); bottom: calc(var(--ctrl) + 2 * var(--edge)); display: grid; justify-items: end; gap: calc(.3 * var(--u)); pointer-events: none; }
+.game-event { border: var(--hair) solid var(--color-muted); border-radius: var(--radius-sm); padding: calc(.2 * var(--u)) calc(.6 * var(--u)); background: var(--color-onyx); color: var(--color-muted); font-size: var(--t-xs); font-weight: 800; animation: event-in .25s ease-out both; }
+.game-error { position: absolute; z-index: 30; left: 50%; bottom: calc(var(--hand-visible) + var(--gap)); max-width: min(80vw, calc(60 * var(--u))); overflow: hidden; transform: translateX(-50%); border: var(--hair) solid var(--color-danger); border-radius: var(--radius-sm); padding: calc(.3 * var(--u)) calc(.9 * var(--u)); background: var(--color-onyx); color: var(--color-danger); font-size: var(--t-xs); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.game-menu { position: fixed; inset: 0 auto 0 0; z-index: 60; display: grid; width: min(78vw, 22rem); grid-template-rows: auto auto repeat(3, auto) 1fr auto; gap: var(--space-2); overflow: auto; padding: var(--space-3); background: var(--color-onyx); }
+.leave-game { align-self: end; }
+
+.deal-animation { position: fixed; inset: 0; z-index: 55; overflow: hidden; background: #0d0d0dcc; pointer-events: none; }
+.deal-deck, .deal-card, .deal-rest-deck, .deal-first-discard { position: absolute; top: 50%; left: 50%; width: var(--card-w); aspect-ratio: 5 / 7; border: var(--hair) solid var(--color-onyx); border-radius: var(--radius-sm); transform: translate(-50%, -50%); }
+.deal-deck { z-index: 3; animation: deal-deck-appear .35s ease-out both; }
+.deal-card { z-index: 4; animation: deal-card-flight .72s cubic-bezier(.2,.7,.25,1) var(--deal-delay) both; }
+.deal-rest-deck { z-index: 2; animation: deal-rest 1s ease 2.65s both; }
+.deal-first-discard { z-index: 5; animation: deal-discard 1s ease 2.75s both; backface-visibility: hidden; }
+@keyframes target-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.4); } }
+@keyframes urgent-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes event-in { from { opacity: 0; transform: translateX(.6rem); } to { opacity: 1; transform: none; } }
+@keyframes deal-deck-appear { from { opacity: 0; transform: translate(-50%, -50%) scale(.55) rotate(-8deg); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes deal-card-flight { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--target-x)), calc(-50% + var(--target-y))) rotate(var(--target-r)); } }
+@keyframes deal-rest { 0% { opacity: 0; transform: translate(-50%, -50%); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% - 40vw), calc(-50% + 2vh)) scale(.9); } }
+@keyframes deal-discard { 0% { opacity: 0; transform: translate(-50%, -50%) rotateY(180deg); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + 40vw), calc(-50% + 2vh)) rotateY(0); } }
+/* Reduced motion keeps every cue, only without travel: flights pulse in place
+   (see CardFlight) and the deal collapses to a short fade. Hiding them outright
+   would leave the board untraceable, which is the opposite of the intent. */
+@media (prefers-reduced-motion: reduce) {
+  .is-target, .turn-countdown.is-urgent { animation: none; }
+  .playing-card { transition: none; }
+  .deal-card, .deal-rest-deck, .deal-first-discard { display: none; }
+  .deal-animation { animation: deal-reduced .5s ease-out both; }
+  .deal-deck { animation: none; }
+}
+@keyframes deal-reduced { from { opacity: 0; } 60% { opacity: 1; } to { opacity: 0; } }
+
 .tutorial-dialog { display: grid; width: min(90vw, 34rem); justify-items: center; gap: var(--space-3); text-align: center; }
 .tutorial-dialog h2, .tutorial-dialog p { margin: 0; }
 .tutorial-dialog > p:not(.overline) { min-height: 4.5rem; color: var(--color-muted); line-height: 1.55; }
@@ -102,7 +236,6 @@
 .rotate-icon { font-size: 4rem; }
 
 @media (max-height: 420px) and (orientation: landscape) { .result-panel { grid-template-columns: minmax(9rem, .65fr) minmax(14rem, 1.35fr); align-items: center; }.result-panel > .button-primary { grid-column: 1 / -1; }.result-row { min-height: 2rem; }.result-panel .dialog-title { grid-column: 1 / -1; } }
-@media (max-height: 370px) and (orientation: landscape) { .game-view { grid-template-rows: minmax(3rem, 18dvh) minmax(0, 1fr) minmax(5rem, 31dvh); }.playing-card { min-width: 2.15rem; height: min(7rem, 21dvh); }.turn-actions button, .meld-card button { min-height: 2.5rem; }.opponent-card { min-width: 6.5rem; } }
 
 @media (max-height: 600px) and (orientation: portrait) { .login-card { gap: .7rem; padding: 1rem; }.login-card .brand { font-size: 2rem; }.login-note { font-size: .68rem; }.lobby-list-content { gap: .4rem; }.lobby-card { min-height: 4.8rem; }.member-card { min-height: 3rem; } }
 @media (max-width: 390px) { .create-button { padding-inline: .55rem; }.settings-form { grid-template-columns: 1fr; }.settings-form > button { grid-column: 1; } }

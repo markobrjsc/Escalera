@@ -1,8 +1,11 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { validateGroup, validatePhase, validateStreet } from "@escalera/game-rules";
+import type { Card, Phase } from "@escalera/game-rules";
 
 const API_URL = "/api";
 const SOCKET_URL = window.location.origin;
+const CARD_BACK = "/cards/CB.png";
 
 type User = { id: string; username: string; avatarKey: string | null; tutorialCompleted: boolean };
 type Lobby = {
@@ -13,7 +16,6 @@ type Lobby = {
   settings: { maxPlayers: number; jokersPerPlayer: number; maxTurnSeconds: number | null; streetsRequireSameSuit: boolean; confirmTurnEnd: boolean };
   players: Array<{ user: User; ready: boolean; connected: boolean }>;
 };
-type Card = { id: string; kind: "joker" } | { id: string; kind: "standard"; rank: string; suit: string; deck: number };
 type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: Card[]; sameSuit: boolean };
 type RoundResult = { round: number; phase: number; endedById: string; scores: Array<{ userId: string; penalty: number; totalPenalty: number }> };
 type FinalPlacement = { userId: string; rank: number; totalPenalty: number };
@@ -150,41 +152,213 @@ function LobbyView({ user, lobby, connected, error, setError, onLeave, onProfile
   return <main className="portrait-view lobby-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Lobby verlassen" onClick={() => void onLeave()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={() => onProfile(user.id)}><Avatar user={user} /></button></header><section className="lobby-layout"><h2 className="lobby-name">{lobby.name}</h2><div className="lobby-settings-row"><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span></section>{isHost && <button className="button-icon lobby-settings-button" aria-label="Lobby-Einstellungen" onClick={() => setEditing(true)}>⚙</button>}</div><section className="surface members-panel"><div className="list-title lobby-player-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className="member-list">{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"} ${player.connected ? "" : "is-offline"}`} key={player.user.id}><Avatar user={player.user} onClick={() => onProfile(player.user.id)} /><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"} · {player.connected ? "Online" : "Offline"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}{emptySeats.map((_, index) => <article className="member-card member-slot-empty" aria-label="Freier Spielerplatz" key={`empty-${index}`}><span className="empty-seat-icon">+</span><strong>Freier Platz</strong><span>Wartet auf Spieler</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer></section>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
 }
 
+// The client mirrors the server by calling the very same rule functions, so a
+// highlighted target can never disagree with what the engine would accept.
+// Compare server/src/game/game-engine.ts: layPhase, layAdditionalMeld, addCardToMeld.
+function meldAccepts(meld: GameMeld, card: Card) {
+  const cards = [...meld.cards, card];
+  return (meld.type === "group" ? validateGroup(cards, 3) : validateStreet(cards, { minimumSize: 3, sameSuit: meld.sameSuit })).valid;
+}
+function canLayMeld(cards: Card[], sameSuit: boolean) {
+  return cards.length >= 3 && (validateGroup(cards, 3).valid || validateStreet(cards, { minimumSize: 3, sameSuit }).valid);
+}
+function canLayPhase(cards: Card[], phase: number) {
+  try { return validatePhase(phase as Phase, phaseGroups(cards, phase)).valid; } catch { return false; }
+}
+
+type Flight = { key: string; asset: string; from: DOMRect; to: DOMRect; flip: boolean };
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const listener = () => setReduced(query.matches);
+    query.addEventListener("change", listener);
+    return () => query.removeEventListener("change", listener);
+  }, []);
+  return reduced;
+}
+
 function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void; onTutorial: () => void }) {
   const [menu, setMenu] = useState(false); const [scoreboard, setScoreboard] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
   const [selected, setSelected] = useState<string[]>([]); const [busy, setBusy] = useState(false); const [actionError, setActionError] = useState("");
-  const [dismissedRound, setDismissedRound] = useState<number | null>(null);
-  const opponents = useMemo(() => game.state.players.filter((player) => player.userId !== user.id).map((player) => { const member = lobby.players.find((entry) => entry.user.id === player.userId); return { ...player, user: member?.user ?? { id: player.userId, username: "Spieler", avatarKey: null, tutorialCompleted: false }, connected: member?.connected ?? false }; }).sort((a, b) => Number(a.userId === game.state.activePlayerId) - Number(b.userId === game.state.activePlayerId)), [game, lobby, user]);
+  const [dismissedRound, setDismissedRound] = useState<number | null>(null); const [dealing, setDealing] = useState(false);
+  const [drag, setDrag] = useState<{ cardId: string; x: number; y: number; zone: string | null } | null>(null);
+  const [flights, setFlights] = useState<Flight[]>([]); const [events, setEvents] = useState<Array<{ key: string; text: string }>>([]);
+  const reduced = usePrefersReducedMotion();
+  const anchors = useRef(new Map<string, HTMLElement>());
+  const anchor = useCallback((key: string) => (el: HTMLElement | null) => { if (el) anchors.current.set(key, el); else anchors.current.delete(key); }, []);
+
+  const players = useMemo(() => game.state.players.map((player) => { const member = lobby.players.find((entry) => entry.user.id === player.userId); return { ...player, user: member?.user ?? { id: player.userId, username: "Spieler", avatarKey: null, tutorialCompleted: false }, connected: member?.connected ?? false }; }), [game.state.players, lobby.players]);
+  const activePlayer = players.find((player) => player.userId === game.state.activePlayerId) ?? players[0];
+  const turnOrder = players.filter((player) => player.userId !== game.state.activePlayerId);
   const hand = useMemo(() => [...game.state.ownHand].sort((a, b) => cardSort(a, b, sort)), [game.state.ownHand, sort]);
-  useEffect(() => setSelected((current) => current.filter((id) => game.state.ownHand.some((card) => card.id === id))), [game.state.ownHand]);
   const self = game.state.players.find((player) => player.userId === user.id)!;
+  const sameSuit = lobby.settings.streetsRequireSameSuit;
+  const canDraw = game.state.turn.canAct && !game.state.turn.hasDrawn && !busy;
   const canPlay = game.state.turn.canAct && game.state.turn.hasDrawn && !busy;
+  const selectedCards = useMemo(() => hand.filter((card) => selected.includes(card.id)), [hand, selected]);
+  const canDiscard = canPlay && selected.length === 1;
+  // Only offer the meld zone when the selection would actually pass validation.
+  const canLay = canPlay && (self.phaseLaid ? canLayMeld(selectedCards, sameSuit) : canLayPhase(selectedCards, game.state.phase));
+  const openMelds = useMemo(() => canPlay && self.phaseLaid && selectedCards.length === 1 ? game.state.melds.filter((meld) => meldAccepts(meld, selectedCards[0])).map((meld) => meld.id) : [], [canPlay, self.phaseLaid, selectedCards, game.state.melds]);
+  const targets = useMemo(() => new Set<string>([...(canDraw ? ["draw", ...(game.state.discardTop ? ["discard"] : [])] : []), ...(canDiscard ? ["discard"] : []), ...(canLay ? ["meldzone"] : []), ...openMelds.map((id) => `meld:${id}`)]), [canDraw, canDiscard, canLay, openMelds, game.state.discardTop]);
+
+  useEffect(() => setSelected((current) => current.filter((id) => game.state.ownHand.some((card) => card.id === id))), [game.state.ownHand]);
+  useEffect(() => { const key = `escalera-deal-${lobby.code}-${game.state.round}`; if (game.state.round === 1 && game.state.ownHand.length >= 11 && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); setDealing(true); const timer = window.setTimeout(() => setDealing(false), reduced ? 0 : 3600); return () => window.clearTimeout(timer); } }, [game.state.ownHand.length, game.state.round, lobby.code, reduced]);
+
+  // Animations are keyed by commandId, so a replayed realtime event or a
+  // reconnect re-render never animates the same action twice. The first state
+  // seen only seeds the set: joining a game in progress must not replay history.
+  const seen = useRef(new Set<string>()); const primed = useRef(false);
+  useEffect(() => {
+    const fresh = game.state.recentActions.filter((action) => !seen.current.has(action.commandId));
+    for (const action of game.state.recentActions) seen.current.add(action.commandId);
+    if (!primed.current) { primed.current = true; return; }
+    if (!fresh.length) return;
+    setEvents((current) => [...current, ...fresh.map((action) => ({ key: action.commandId, text: actionText(action, lobby, user.id) }))].slice(-3));
+    if (dealing) return;
+    const rect = (key: string) => anchors.current.get(key)?.getBoundingClientRect();
+    const next: Flight[] = [];
+    for (const action of fresh) {
+      const seat = action.userId === user.id ? "hand" : `seat:${action.userId}`;
+      const plan = action.type === "draw" ? { from: "draw", to: seat, asset: CARD_BACK, flip: false }
+        : action.type === "buy" ? { from: "discard", to: seat, asset: CARD_BACK, flip: false }
+        : action.type === "discard" ? { from: seat, to: "discard", asset: game.state.discardTop ? cardAsset(game.state.discardTop) : CARD_BACK, flip: true }
+        : action.type === "add-to-meld" ? { from: seat, to: "meldzone", asset: CARD_BACK, flip: false }
+        : action.type === "phase" || action.type === "meld" ? { from: seat, to: "meldzone", asset: CARD_BACK, flip: false }
+        : null;
+      if (!plan) continue;
+      const from = rect(plan.from); const to = rect(plan.to);
+      if (from && to) next.push({ key: action.commandId, asset: plan.asset, from, to, flip: plan.flip });
+    }
+    if (next.length) setFlights((current) => [...current, ...next]);
+  }, [game.version]);
+  useEffect(() => { if (!events.length) return; const timer = window.setTimeout(() => setEvents((current) => current.slice(1)), 2600); return () => window.clearTimeout(timer); }, [events]);
+
   const act = async (path: string, body?: object) => {
     setBusy(true); setActionError("");
-    try {
-      const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) });
-      onGame(result); setSelected([]);
-    } catch (reason) {
-      if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game);
-      setActionError(message(reason));
-    } finally { setBusy(false); }
+    try { const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) }); onGame(result); setSelected([]); }
+    catch (reason) { if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game); setActionError(message(reason)); }
+    finally { setBusy(false); }
   };
   const toggleCard = (cardId: string) => setSelected((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
-  const submitPhase = () => {
-    try { void act("phase", { combinations: phaseCombinations(hand.filter((card) => selected.includes(card.id)), game.state.phase) }); }
-    catch (reason) { setActionError(message(reason)); }
+  const laySelected = () => { try { if (self.phaseLaid) void act("melds", { cardIds: selected }); else void act("phase", { combinations: phaseGroups(selectedCards, game.state.phase).map((group) => group.map((card) => card.id)) }); } catch (reason) { setActionError(message(reason)); } };
+  const runZone = (zone: string, cardId?: string) => {
+    const card = cardId ?? selected[0];
+    if (zone === "draw" && canDraw) return void act("draw", { source: "draw" });
+    if (zone === "discard" && canDiscard && card) return void act("discard", { cardId: card });
+    if (zone === "discard" && canDraw) return void act("draw", { source: "discard" });
+    if (zone === "meldzone" && canLay) return laySelected();
+    if (zone.startsWith("meld:") && openMelds.includes(zone.slice(5)) && card) return void act(`melds/${zone.slice(5)}/cards`, { cardId: card });
+    setActionError("Diese Karte passt hier nicht.");
   };
+
+  // Pointer events rather than HTML5 drag-and-drop: the native API emits nothing
+  // on touch, so this is the only path that serves mouse and finger alike.
+  const startDrag = (card: Card) => (event: React.PointerEvent) => {
+    if (!canPlay || event.button > 0) return;
+    const originX = event.clientX; const originY = event.clientY; let live = false;
+    const zoneAt = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest("[data-zone]") as HTMLElement | null)?.dataset.zone ?? null;
+    const move = (moveEvent: PointerEvent) => {
+      if (!live && Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < 8) return;
+      if (!live) { live = true; setSelected((current) => current.includes(card.id) ? current : [card.id]); }
+      const zone = zoneAt(moveEvent.clientX, moveEvent.clientY);
+      setDrag({ cardId: card.id, x: moveEvent.clientX, y: moveEvent.clientY, zone });
+    };
+    const finish = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish);
+      setDrag(null);
+      if (!live) return;
+      const zone = zoneAt(upEvent.clientX, upEvent.clientY);
+      if (zone) runZone(zone, card.id);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish);
+  };
+  // A zone is a target only if the rules accept it; hovering any other zone while
+  // dragging reads as refused, which is the feedback without sending an action.
+  const zoneClass = (zone: string) => targets.has(zone) ? "is-target" : drag?.zone === zone ? "is-refused" : "";
+
+  const hint = !game.state.turn.canAct ? `${activePlayer?.user.username ?? "Spieler"} ist am Zug` : !game.state.turn.hasDrawn ? "Ziehe vom Stapel oder von der Ablage" : canLay ? "Auswahl in die Meld-Zone legen" : openMelds.length ? "An eine passende Auslage anlegen" : selected.length === 1 ? "Karte ablegen oder anlegen" : "Wähle Karten oder lege eine Karte ab";
   const showRoundResult = game.state.status === "ACTIVE" && game.state.lastRoundResult && dismissedRound !== game.state.lastRoundResult.round;
-  return <main className="landscape-view game-view">
+  return <main className={`landscape-view game-view ${drag ? "is-dragging" : ""}`} data-version={game.version}>
     <Orientation landscape />
-    <header className="game-top"><button className="button-icon" aria-label="Spielmenü" onClick={() => setMenu(true)}>☰</button><div className="opponent-row">{opponents.map((player) => <article className={`opponent-card ${player.userId === game.state.activePlayerId ? "is-active" : ""} ${player.connected ? "" : "is-offline"}`} key={player.userId}><Avatar user={player.user} onClick={() => onProfile(player.userId)} /><div><strong>{player.user.username}</strong><span>{player.connected ? `${player.handCount} Karten` : "Offline · wird übersprungen"}</span><span>{player.coins} Münzen · {player.totalPenalty} P</span></div></article>)}</div><Connection connected={connected} /></header>
-    <section className="game-board"><button className="game-pile draw-pile" aria-label={`Vom Stapel ziehen, ${game.state.drawPileCount} Karten verbleiben`} disabled={!game.state.turn.canAct || game.state.turn.hasDrawn || busy} onClick={() => void act("draw", { source: "draw" })}><img src="/cards/CB.png" alt="Kartenrückseite" /><strong>{game.state.drawPileCount}</strong></button><div className="meld-zone">{game.state.melds.length ? game.state.melds.map((meld, index) => <article className="meld-card" key={meld.id}><div><strong>{meld.type === "group" ? `Gruppe ${index + 1}` : `Straße ${index + 1}`}</strong><span>{meld.cards.map(cardLabel).join(" · ")}</span><div className="meld-card-images">{meld.cards.map((card) => <CardFace card={card} key={card.id} />)}</div></div><button disabled={!canPlay || !self.phaseLaid || selected.length !== 1} onClick={() => void act(`melds/${meld.id}/cards`, { cardId: selected[0] })}>Karte anlegen</button></article>) : <div className="empty-meld">Hier erscheinen Gruppen und Straßen</div>}</div><div className="discard-area"><button className="game-pile discard-pile" aria-label={game.state.discardTop ? `${cardLabel(game.state.discardTop)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!game.state.discardTop || !game.state.turn.canAct || game.state.turn.hasDrawn || busy} onClick={() => void act("draw", { source: "discard" })}>{game.state.discardTop ? <CardFace card={game.state.discardTop} /> : <strong>Leer</strong>}</button>{game.state.discardOffer && <button className="buy-button" disabled={busy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}</div></section>
-    <section className="player-hand"><div className="hand-toolbar"><div className="turn-label">{game.state.status === "FINISHED" ? "Partie beendet" : game.state.activePlayerId === user.id ? `Dein Zug · Phase ${game.state.phase}` : `Runde ${game.state.round} · Phase ${game.state.phase}`}</div><TurnCountdown deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /><div className="turn-actions">{!self.phaseLaid ? <button disabled={!canPlay || selected.length < 3} onClick={submitPhase}>Phase auslegen{[2,4,6].includes(game.state.phase) ? " · 2 Gruppen" : ""}</button> : <button disabled={!canPlay || selected.length < 3} onClick={() => void act("melds", { cardIds: selected })}>Kombi auslegen</button>}<button className="button-primary" disabled={!canPlay || selected.length !== 1} onClick={() => void act("discard", { cardId: selected[0] })}>Abwerfen</button></div>{actionError && <span className="game-error" role="alert">{actionError}</span>}</div><div className="hand-cards" role="group" aria-label="Deine Handkarten">{hand.map((card, index) => <button type="button" aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${isRed(card) ? "red-card" : ""} ${selected.includes(card.id) ? "is-selected" : ""}`} style={{ "--card-index": index } as React.CSSProperties} key={card.id}><CardFace card={card} /></button>)}</div></section>
-    {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => setSort(sort === "rank" ? "suit" : "rank")}>Hand: {sort === "rank" ? "Wert" : "Zeichen"}</button><button onClick={() => { setMenu(false); onProfile(user.id); }}>Mein Profil</button><button onClick={() => { setMenu(false); onTutorial(); }}>Kurzanleitung</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}
+    <header className="game-hud">
+      <section className="turn-order" aria-label="Zugreihenfolge"><span className="hud-kicker">Reihenfolge</span>{turnOrder.map((player, index) => <article className={`turn-order-player ${player.connected ? "" : "is-offline"}`} ref={anchor(`seat:${player.userId}`)} key={player.userId}><span className="turn-position">{index + 1}</span><Avatar user={player.user} onClick={() => onProfile(player.userId)} /><div><strong>{player.user.username}</strong><span>{player.coins} Münzen · {player.handCount} Karten</span></div></article>)}</section>
+      <section className={`active-player-hud ${activePlayer?.userId === user.id ? "is-self" : ""}`} ref={anchor(`seat:${activePlayer?.userId}`)}><Avatar user={activePlayer.user} onClick={() => onProfile(activePlayer.userId)} /><div><span className="hud-kicker">{activePlayer.userId === user.id ? "Du bist am Zug" : "Am Zug"}</span><strong>{activePlayer.user.username}</strong><span>{activePlayer.coins} Münzen · {activePlayer.totalPenalty} Punkte · {activePlayer.handCount} Karten</span></div><TurnCountdown deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /></section>
+      <section className="phase-hud"><span className="hud-kicker">Runde {game.state.round}</span><strong>Phase {game.state.phase} / 7</strong><span>{self.phaseLaid ? "Phase ausgelegt" : "Phase offen"}</span></section>
+    </header>
+    <p className="turn-hint" aria-live="polite">{hint}</p>
+    <section className="game-board">
+      <div className="pile-station">
+        <button ref={anchor("draw")} className={`game-pile draw-pile ${zoneClass("draw")}`} data-zone="draw" aria-label={`Vom Stapel ziehen, ${game.state.drawPileCount} Karten verbleiben`} disabled={!canDraw} onClick={() => runZone("draw")}><img src={CARD_BACK} alt="" /><strong className="pile-count">{game.state.drawPileCount}</strong></button>
+        <span>Ziehstapel</span>
+      </div>
+      <div className={`meld-zone ${zoneClass("meldzone")}`} ref={anchor("meldzone")} data-zone="meldzone" onClick={() => canLay && runZone("meldzone")}>
+        {game.state.melds.length ? game.state.melds.map((meld) => <article className={`meld-card ${openMelds.includes(meld.id) ? "is-target" : ""}`} data-zone={`meld:${meld.id}`} ref={anchor(`meld:${meld.id}`)} onClick={(event) => { event.stopPropagation(); runZone(`meld:${meld.id}`); }} key={meld.id} aria-label={`${meld.type === "group" ? "Gruppe" : "Straße"}: ${meld.cards.map(cardLabel).join(", ")}`}><div className="meld-cards" style={{ "--meld-count": meld.cards.length } as React.CSSProperties}>{meld.cards.map((card) => <CardFace card={card} key={card.id} />)}</div></article>) : <div className="empty-meld"><span className="empty-meld-icon">◇</span><strong>Meld-Zone</strong><span>Gruppen und Straßen erscheinen hier</span></div>}
+      </div>
+      <div className="pile-station">
+        <button ref={anchor("discard")} className={`game-pile discard-pile ${zoneClass("discard")}`} data-zone="discard" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : game.state.discardTop ? `${cardLabel(game.state.discardTop)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}>{game.state.discardTop ? <CardFace card={game.state.discardTop} /> : <strong>Leer</strong>}<strong className="pile-count">{game.state.discardTop ? 1 : 0}</strong></button>
+        <span>Ablage</span>
+        {game.state.discardOffer && <button className="buy-button" disabled={busy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}
+      </div>
+    </section>
+    <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{hand.map((card) => <button type="button" onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""}`} style={{ "--card-count": hand.length } as React.CSSProperties} key={card.id}><CardFace card={card} /></button>)}</div></section>
+    <nav className="game-nav" aria-label="Spielnavigation"><button className="game-nav-button" aria-label="Spielmenü öffnen" onClick={() => setMenu(true)}>☰ <span>Menü</span></button></nav>
+    <GameStatusBar connected={connected} />
+    <div className="game-events" aria-live="polite">{events.map((event) => <span className="game-event" key={event.key}>{event.text}</span>)}</div>
+    {actionError && <div className="game-error" role="alert">{actionError}</div>}
+    {drag && <div className="drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">{(() => { const card = hand.find((entry) => entry.id === drag.cardId); return card ? <CardFace card={card} /> : null; })()}</div>}
+    <div className="flight-layer" aria-hidden="true">{flights.map((flight) => <CardFlight flight={flight} reduced={reduced} onDone={() => setFlights((current) => current.filter((entry) => entry.key !== flight.key))} key={flight.key} />)}</div>
+    {dealing && <DealAnimation players={players} selfId={user.id} />}
+    {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><div className="menu-sort"><span className="hud-kicker">Hand sortieren</span><div className="sort-control"><button className={sort === "rank" ? "is-active" : ""} aria-pressed={sort === "rank"} onClick={() => setSort("rank")}>Wert</button><button className={sort === "suit" ? "is-active" : ""} aria-pressed={sort === "suit"} onClick={() => setSort("suit")}>Farbe</button></div></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => { setMenu(false); onProfile(user.id); }}>Mein Profil</button><button onClick={() => { setMenu(false); onTutorial(); }}>Kurzanleitung</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}
     {scoreboard && <Scoreboard game={game} lobby={lobby} onClose={() => setScoreboard(false)} />}
     {showRoundResult && <RoundResultOverlay result={game.state.lastRoundResult!} nextPhase={game.state.phase} lobby={lobby} onContinue={() => setDismissedRound(game.state.lastRoundResult!.round)} />}
     {game.state.status === "FINISHED" && <FinalResultOverlay placements={game.state.placements} lobby={lobby} onLeave={onLeave} />}
   </main>;
+}
+
+// Reduced motion still gets a cue, just not a travelling one: the card pulses at
+// its destination instead of flying. "Reduced" in the ticket means less movement,
+// not a silent board where nothing is traceable.
+function CardFlight({ flight, reduced, onDone }: { flight: Flight; reduced: boolean; onDone: () => void }) {
+  const ref = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current; if (!element) return onDone();
+    const scale = flight.to.width / Math.max(1, flight.from.width);
+    const target = `translate(${flight.to.left}px, ${flight.to.top}px) scale(${scale})`;
+    const animation = reduced
+      ? element.animate([{ transform: target, opacity: 0 }, { transform: target, opacity: .95, offset: .35 }, { transform: target, opacity: 0 }], { duration: 620, easing: "ease-out", fill: "forwards" })
+      : element.animate([
+          { transform: `translate(${flight.from.left}px, ${flight.from.top}px) scale(1) rotateY(${flight.flip ? "180deg" : "0deg"})`, opacity: 0 },
+          { opacity: 1, offset: .12 },
+          { transform: `${target} rotateY(0deg)`, opacity: 0 }
+        ], { duration: 520, easing: "cubic-bezier(.22,.7,.25,1)", fill: "forwards" });
+    animation.onfinish = onDone; animation.oncancel = onDone;
+    return () => animation.cancel();
+  }, []);
+  return <img className="flight-card" ref={ref} src={flight.asset} alt="" style={{ width: flight.from.width, height: flight.from.height }} />;
+}
+
+function actionText(action: RecentGameAction, lobby: Lobby, selfId: string) {
+  const who = action.userId === selfId ? "Du" : playerName(lobby, action.userId);
+  const verb: Record<string, string> = { draw: "zieht eine Karte", buy: "kauft die Ablage", discard: "legt ab", phase: "legt die Phase aus", meld: "legt eine Kombination aus", "add-to-meld": "legt an", timeout: "hat die Zeit überschritten", "disconnect-skip": "wurde übersprungen" };
+  return `${who} ${verb[action.type] ?? action.type}`;
+}
+
+function GameStatusBar({ connected }: { connected: boolean }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30_000); return () => window.clearInterval(timer); }, []);
+  const time = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return <div className="game-status-bar" aria-label={`Verbindung ${connected ? "sehr gut" : "unterbrochen"}, ${time}`}><SignalIcon online={connected} /><b>|</b><time>{time}</time></div>;
+}
+
+function SignalIcon({ online }: { online: boolean }) {
+  return <svg className={`signal-icon ${online ? "online" : ""}`} viewBox="0 0 16 13" aria-hidden="true" focusable="false"><path d="M1 4.2a10.5 10.5 0 0 1 14 0" /><path d="M3.6 7.2a6.8 6.8 0 0 1 8.8 0" /><path d="M6.2 10.1a3 3 0 0 1 3.6 0" /></svg>;
+}
+
+function DealAnimation({ players, selfId }: { players: Array<{ userId: string }>; selfId: string }) {
+  return <div className="deal-animation" aria-hidden="true"><img className="deal-deck" src={CARD_BACK} alt="" />{players.flatMap((player, playerIndex) => Array.from({ length: 11 }, (_, cardIndex) => { const isSelf = player.userId === selfId; return <img className={`deal-card ${isSelf ? "to-self" : "to-opponent"}`} src={CARD_BACK} alt="" style={{ "--deal-delay": `${(playerIndex * 11 + cardIndex) * 38}ms`, "--target-x": isSelf ? `${(cardIndex - 5) * 3.1}vw` : `${-38 + playerIndex * 15 + (cardIndex - 5) * .18}vw`, "--target-y": isSelf ? "43vh" : "-38vh", "--target-r": `${(cardIndex - 5) * 1.5}deg` } as React.CSSProperties} key={`${player.userId}-${cardIndex}`} />; }))}<img className="deal-rest-deck" src={CARD_BACK} alt="" /><img className="deal-first-discard" src="/cards/5C.svg" alt="" /></div>;
 }
 
 function Scoreboard({ game, lobby, onClose }: { game: Game; lobby: Lobby; onClose: () => void }) {
@@ -280,8 +454,10 @@ function cardAsset(card: Card) { if (card.kind === "joker") return "/cards/J.png
 function CardFace({ card }: { card: Card }) { return <img className="card-face" src={cardAsset(card)} alt={cardLabel(card)} draggable={false} />; }
 function isRed(card: Card) { return card.kind === "standard" && (card.suit === "hearts" || card.suit === "diamonds"); }
 function cardSort(a: Card, b: Card, mode: "rank" | "suit") { const rank = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]; const av = a.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(a.rank) : a.suit.localeCompare(b.kind === "standard" ? b.suit : "zz"); const bv = b.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(b.rank) : 0; return typeof av === "number" && typeof bv === "number" ? av - bv : 0; }
-function phaseCombinations(cards: Card[], phase: number) {
-  if (phase === 7) return [cards.map((card) => card.id)];
+// Splits a selection into the combinations the current phase demands. Throws when
+// the shape is wrong; canLayPhase() turns that into a plain boolean for the UI.
+function phaseGroups(cards: Card[], phase: number): Card[][] {
+  if (phase === 7) return [cards];
   const requiredGroups = [2, 4, 6].includes(phase) ? 2 : 1;
   const groups = new Map<string, Card[]>(); const jokers = cards.filter((card) => card.kind === "joker");
   for (const card of cards) if (card.kind === "standard") groups.set(card.rank, [...(groups.get(card.rank) ?? []), card]);
@@ -292,6 +468,6 @@ function phaseCombinations(cards: Card[], phase: number) {
     if (!target) throw new Error("Pro Kombination ist nur ein Joker erlaubt.");
     target.push(joker);
   }
-  return combinations.map((combination) => combination.map((card) => card.id));
+  return combinations;
 }
 function message(reason: unknown) { return reason instanceof Error ? reason.message : "Aktion konnte nicht ausgeführt werden."; }
