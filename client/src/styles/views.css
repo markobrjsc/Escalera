@@ -132,12 +132,14 @@
   --ctrl: calc(4 * var(--fu));
   --gap: calc(1.6 * var(--u));
   --edge: calc(2 * var(--u));
-  --hair: max(1px, calc(.12 * var(--u)));
-  --line: max(2px, calc(.18 * var(--u)));
+  --hair: max(2px, calc(.12 * var(--u)));
+  --line: max(3px, calc(.18 * var(--u)));
   --card-h: calc(26 * var(--u));
   --card-w: calc(var(--card-h) * 5 / 7);
-  --hand-span: 75vw;
-  --hand-visible: calc(.75 * var(--card-h));
+  --color-target: #38ef9a;
+  --color-select: #00d773;
+  --hand-span: 65vw;
+  --hand-visible: calc(.65 * var(--card-h));
   --side-lane: calc(50vw - var(--hand-span) / 2 - 2 * var(--edge));
   position: relative;
   display: grid;
@@ -175,19 +177,42 @@
 .phase-hud > span:last-child { color: var(--color-muted); font-size: var(--t-xs); white-space: nowrap; }
 .turn-hint { z-index: 8; margin: 0; color: var(--color-ready); font-size: var(--t-xs); font-weight: 800; letter-spacing: .06em; text-align: center; text-transform: uppercase; }
 
-.game-board { display: grid; min-height: 0; grid-template-columns: var(--card-w) minmax(0, 1fr) var(--card-w); gap: var(--gap); }
-.pile-station { display: grid; align-self: center; min-width: 0; justify-items: center; gap: calc(.4 * var(--u)); color: var(--color-muted); font-size: var(--t-xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.game-pile { position: relative; display: grid; width: 100%; min-width: 0; min-height: 0; aspect-ratio: 5 / 7; place-content: center; overflow: hidden; border: var(--line) solid var(--color-white); border-radius: var(--radius-sm); padding: 0; background: var(--color-jet); text-align: center; font-size: var(--t-xs); }
-.game-pile > img { width: 100%; height: 100%; object-fit: cover; }
-.game-pile:disabled { cursor: default; opacity: .5; }
-.discard-pile { background: var(--color-white); color: var(--color-onyx); }
-.pile-count { position: absolute; right: calc(.3 * var(--u)); bottom: calc(.3 * var(--u)); z-index: 2; min-width: calc(2.4 * var(--u)); border: var(--hair) solid var(--color-white); border-radius: var(--radius-sm); padding: calc(.1 * var(--u)) calc(.3 * var(--u)); background: var(--color-onyx); color: var(--color-white); font-size: var(--t-xs); }
+/* 2.5D: the board sits on a receding table. A gentle rotateX tilts the play area
+   back so piles and cards show a little of their top edge and thickness. Flight
+   anchors read screen-space rects, so the tilt does not disturb the animations. */
+.game-board {height: 115%; display: grid; min-height: 0; grid-template-columns: var(--card-w) minmax(0, 1fr) var(--card-w); gap: var(--gap); transform: perspective(1600px) rotateX(25deg); transform-origin: center 52%; transform-style: preserve-3d; }
+.pile-station { display: grid; align-self: center; min-width: 0; justify-items: center; gap: calc(2 * var(--u)); color: var(--color-muted); font-size: var(--t-xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+/* --pile-depth (card count) drives the deck's visible thickness, drawn below the
+   top card by ::before. It is capped at --max-depth so a full draw pile reads as
+   a stack, not a tower. */
+/* The slot is the framed drop zone. It centres the top card and reserves
+   --max-depth of head- and footroom, so the thickness can grow downward and still
+   stay inside the frame. Generous padding and a thick border make it an obvious
+   drop target. */
+.pile-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: calc(1.3 * var(--u)); border: max(3px, calc(.32 * var(--u))) solid #52796f66; border-radius: calc(.9 * var(--u)); transition: border-color .15s, box-shadow .15s; }
+.pile-slot.is-target { border-color: var(--color-target); box-shadow: 0 0 0 max(2px, calc(.2 * var(--u))) var(--color-target), 0 0 calc(2 * var(--u)) var(--color-target); animation: target-pulse 1.4s ease-in-out infinite; }
+.pile-slot.is-refused { border-color: var(--color-danger); }
+/* Card = texture only, no border, no background. --depth is the visible stack
+   thickness (grows with the card count, capped at --max-depth). margin-block
+   reserves --max-depth above and below so the top card stays centred in the slot
+   while the ::before edge beneath it grows downward without spilling past the
+   frame. */
+.game-pile { --max-depth: calc(1 * var(--u)); --depth: min(calc(var(--pile-depth, 1) * .11 * var(--u)), var(--max-depth)); position: relative; display: grid; width: 100%; min-width: 0; min-height: 0; aspect-ratio: 5 / 7; place-content: center; overflow: visible; border: 0; border-radius: calc(.5 * var(--u)); margin-block: var(--max-depth); padding: 0; background: transparent; text-align: center; font-size: var(--t-xs); }
+/* The stack's front edge sits directly under the top card (tiny overlap hides the
+   seam, so the card rests ON the deck). Fine cream lines read as stacked card
+   sides; the pair of gradients shades the join and the table contact; the box
+   shadow grounds the whole deck. It inherits the card's tilt automatically. */
+.game-pile::before { content: ""; position: absolute; z-index: -1; left: calc(.35 * var(--u)); right: calc(-.35 * var(--u)); top: calc(100% - 2px); height: calc(var(--depth) + 2px); border-radius: 0 0 calc(.45 * var(--u)) calc(.45 * var(--u)); background: linear-gradient(to bottom, #00000055 0, #00000000 30%, #00000000 55%, #000000aa 100%), repeating-linear-gradient(to bottom, #f7f7ee 0 1px, #c7c7be 1px 2px); box-shadow: 0 calc(.5 * var(--u)) calc(.75 * var(--u)) #000d; }
+.game-pile > img, .game-pile > .card-face { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; box-shadow: 0 1px calc(.25 * var(--u)) #0007; }
+.game-pile:disabled { cursor: default; opacity: .55; }
+.pile-empty { display: grid; place-items: center; width: 100%; height: 100%; border: var(--hair) dashed var(--color-muted); border-radius: inherit; color: var(--color-muted); }
+.pile-station b { color: var(--color-white); font-size: var(--t-sm); }
 .buy-button { min-width: 0; min-height: var(--ctrl); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: calc(.7 * var(--u)); color: var(--color-teal); font-size: var(--t-xs); white-space: nowrap; }
 
 /* The meld zone is a plain area: only the cards themselves carry any chrome. */
 .meld-zone { display: grid; height: 100%; min-height: 0; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(38 * var(--u))), 1fr)); grid-auto-rows: calc(15 * var(--u)); align-content: start; gap: var(--gap); overflow-y: auto; overscroll-behavior: contain; border: var(--hair) dashed #52796f55; border-radius: var(--radius-sm); padding: var(--gap); background: transparent; scrollbar-width: none; }
 .meld-zone::-webkit-scrollbar { display: none; }
-.meld-zone:has(> .empty-meld) { grid-auto-rows: minmax(0, 1fr); }
+.meld-zone:has(> .empty-meld) { grid-auto-rows: minmax(0, 2fr); }
 .empty-meld { display: grid; grid-column: 1 / -1; place-content: center; justify-items: center; gap: calc(.2 * var(--u)); color: var(--color-muted); text-align: center; text-transform: uppercase; }
 .empty-meld-icon { color: var(--color-teal); font-size: calc(6 * var(--fu)); }
 .empty-meld strong { color: var(--color-white); font-family: var(--font-display); font-size: var(--t-md); letter-spacing: .04em; }
@@ -196,29 +221,56 @@
 /* Cards sit flush left with a small gap; when the row runs out of room the gap
    goes negative on its own and they overlap instead of shrinking. */
 .meld-cards { --face-h: calc(12 * var(--u)); --face-w: calc(var(--face-h) * 5 / 7); display: flex; min-width: 0; align-items: center; justify-content: flex-start; }
-.meld-cards .card-face { width: var(--face-w); height: var(--face-h); flex: 0 0 auto; margin-right: min(calc(.5 * var(--u)), calc((100% - var(--meld-count) * var(--face-w)) / max(1, var(--meld-count) - 1))); border: var(--hair) solid var(--color-onyx); border-radius: var(--radius-sm); object-fit: cover; }
+.meld-cards .card-face { width: var(--face-w); height: var(--face-h); flex: 0 0 auto; margin-right: min(calc(.5 * var(--u)), calc((100% - var(--meld-count) * var(--face-w)) / max(1, var(--meld-count) - 1))); border-radius: var(--radius-sm); object-fit: cover; box-shadow: calc(-.15 * var(--u)) 0 calc(.2 * var(--u)) #0007; }
 .meld-cards .card-face:last-child { margin-right: 0; }
 
-/* Only rule-valid targets light up; anything else refuses without sending. */
-.is-target { border-color: var(--color-ready) !important; box-shadow: 0 0 0 var(--hair) var(--color-ready); animation: target-pulse 1.5s ease-in-out infinite; }
-.meld-card.is-target { border-color: var(--color-ready) !important; }
+/* Only rule-valid targets light up; a bright colour + thick glow makes them
+   unmistakable. Anything else refuses without sending. */
+.is-target { border-color: var(--color-target) !important; box-shadow: 0 0 0 max(2px, calc(.24 * var(--u))) var(--color-target), 0 0 calc(1.8 * var(--u)) var(--color-target) !important; animation: target-pulse 1.4s ease-in-out infinite; }
+.meld-card.is-target { border-color: var(--color-target) !important; }
 .is-refused { border-color: var(--color-danger) !important; animation: none; }
 
 /* --card-count is set per card in App.tsx, so the overlap that makes the hand
    span exactly --hand-span has to be solved here, on the card itself. */
 .player-hand { position: absolute; z-index: 12; left: calc(50vw - var(--hand-span) / 2); bottom: calc(-.25 * var(--card-h)); width: var(--hand-span); height: var(--card-h); overflow: visible; pointer-events: none; }
 .hand-cards { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; overflow: visible; pointer-events: auto; }
-.playing-card { --card-step: min(var(--card-w), calc((var(--hand-span) - var(--card-w)) / max(1, var(--card-count, 11) - 1))); flex: 0 0 auto; width: var(--card-w); height: var(--card-h); min-width: 0; min-height: 0; margin-left: calc(var(--card-step) - var(--card-w)); transform: translateY(var(--card-lift, 0px)); overflow: hidden; border: var(--line) solid var(--color-onyx); border-radius: var(--radius-sm); padding: 0; background: var(--color-white); touch-action: none; transition: transform .16s ease, border-color .16s ease; }
+/* Hand fan: each card's signed distance from the middle (--pos) drives both a
+   small rotation (outer cards more, middle upright) and a downward arc (middle
+   sits highest), matching a real fanned hand. Horizontal overlap is unchanged. */
+.playing-card {
+  --card-step: min(var(--card-w), calc((var(--hand-span) - var(--card-w)) / max(1, var(--card-count, 11) - 1)));
+  --mid: calc((var(--card-count, 11) - 1) / 2);
+  --pos: calc(var(--card-index, 0) - var(--mid));
+  --fan-rot: calc(var(--pos) * 1.6deg);
+  --arc: calc(var(--pos) * var(--pos) * .28 * var(--u));
+  flex: 0 0 auto; width: var(--card-w); height: var(--card-h); min-width: 0; min-height: 0;
+  margin-left: calc(var(--card-step) - var(--card-w));
+  transform-origin: 50% 190%;
+  transform: translateY(calc(var(--arc) + var(--card-lift, 0px))) rotate(var(--fan-rot));
+  z-index: calc(var(--card-index, 0) + 1);
+  overflow: hidden; border: none; padding: 0; background: transparent; touch-action: none;
+  /* stacked bottom edge = paper thickness */
+  box-shadow: 0 calc(.12 * var(--u)) 0 #c9c9c9, 0 calc(.26 * var(--u)) 0 #a5a5a5, 0 calc(.42 * var(--u)) calc(.3 * var(--u)) #0007;
+  transition: --card-lift .2s ease, box-shadow .18s ease;
+}
+/* Registering the lift makes it a real animatable <length>, so the transform that
+   reads it interpolates smoothly instead of snapping when hover/selection changes. */
+@property --card-lift { syntax: "<length>"; inherits: false; initial-value: 0px; }
 .playing-card:first-child { margin-left: 0; }
-.playing-card:hover, .playing-card:active { --card-lift: calc(-1.2 * var(--u)); z-index: 100; transform: translateY(var(--card-lift)); border-color: var(--color-teal); }
-.playing-card:focus-visible { z-index: 102; outline: var(--line) solid var(--color-teal); outline-offset: calc(.15 * var(--u)); }
-.playing-card.is-selected { --card-lift: calc(-3 * var(--u)); z-index: 101; border-color: var(--color-ready); }
+.card-3d { display: block; width: 100%; height: 100%; }
+/* Highlight: a minimal, consistent lift to the front (no behind-render, so edge
+   cards behave), plus a solid purple ring and glow. */
+.playing-card:hover, .playing-card:active {border-radius: 4%; --card-lift: calc(-1.6 * var(--u)); box-shadow: 0 0 0 max(3px, calc(.22 * var(--u))) var(--color-select), 0 0 calc(1.0 * var(--u)) var(--color-target), 0 calc(.42 * var(--u)) calc(.3 * var(--u)) #0007; }
+.playing-card.is-selected {border-radius: 4%; --card-lift: calc(-10 * var(--u)); box-shadow: 0 0 0 max(2px, calc(.3 * var(--u))) var(--color-select), 0 0 calc(2.4 * var(--u)) var(--color-select), 0 calc(.42 * var(--u)) calc(.3 * var(--u)) #0008; }
+.playing-card:focus-visible { z-index: 61; outline: max(2px, calc(.25 * var(--u))) solid var(--color-select); outline-offset: calc(.1 * var(--u)); }
 .playing-card.is-dragged { opacity: .35; }
 .card-face { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; user-select: none; }
 
-.drag-ghost { position: fixed; z-index: 90; width: var(--card-w); height: var(--card-h); overflow: hidden; border: var(--line) solid var(--color-ready); border-radius: var(--radius-sm); background: var(--color-white); transform: translate(-50%, -50%) rotate(-3deg); pointer-events: none; }
+/* The ghost is the picked-up card: full size, a natural tilt, sitting just above
+   the cursor — not a shrunken upright jump. */
+.drag-ghost { position: fixed; z-index: 90; width: var(--card-w); height: var(--card-h); border: none; background: none; transform: translate(-50%, -55%) rotate(-4deg); pointer-events: none; box-shadow: 0 0 0 max(3px, calc(.22 * var(--u))) var(--color-select), 0 0 calc(1.4 * var(--u)) var(--color-select), 0 calc(.5 * var(--u)) calc(.5 * var(--u)) #000a; border-radius: 4%; }
 .flight-layer { position: fixed; inset: 0; z-index: 88; overflow: hidden; pointer-events: none; }
-.flight-card { position: absolute; top: 0; left: 0; overflow: hidden; border: var(--line) solid var(--color-onyx); border-radius: var(--radius-sm); transform-origin: top left; object-fit: cover; will-change: transform, opacity; }
+.flight-card { position: absolute; top: 0; left: 0; overflow: hidden; border: var(--line) solid var(--color-onyx); border-radius: 4%; transform-origin: top left; object-fit: cover; will-change: transform, opacity; }
 
 .game-nav { position: absolute; z-index: 20; left: max(var(--edge), env(safe-area-inset-left)); bottom: max(var(--edge), env(safe-area-inset-bottom)); display: flex; max-width: var(--side-lane); gap: calc(.5 * var(--u)); }
 .game-nav-button { min-width: 0; min-height: var(--ctrl); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: var(--u); font-size: var(--t-xs); }
@@ -237,26 +289,35 @@
 .game-menu { position: fixed; inset: 0 auto 0 0; z-index: 60; display: grid; width: min(78vw, 22rem); grid-template-rows: auto auto repeat(3, auto) 1fr auto; gap: var(--space-2); overflow: auto; padding: var(--space-3); background: var(--color-onyx); }
 .leave-game { align-self: end; }
 
-.deal-animation { position: fixed; inset: 0; z-index: 55; overflow: hidden; background: #0d0d0dcc; pointer-events: none; }
-.deal-deck, .deal-card, .deal-rest-deck, .deal-first-discard { position: absolute; top: 50%; left: 50%; width: var(--card-w); aspect-ratio: 5 / 7; border: var(--hair) solid var(--color-onyx); border-radius: var(--radius-sm); transform: translate(-50%, -50%); }
-.deal-deck { z-index: 3; animation: deal-deck-appear .35s ease-out both; }
-.deal-card { z-index: 4; animation: deal-card-flight .72s cubic-bezier(.2,.7,.25,1) var(--deal-delay) both; }
-.deal-rest-deck { z-index: 2; animation: deal-rest 1s ease 2.65s both; }
-.deal-first-discard { z-index: 5; animation: deal-discard 1s ease 2.75s both; backface-visibility: hidden; }
+.deal-animation { position: fixed; inset: 0; z-index: 55; overflow: hidden; background: #0d0d0dcc; pointer-events: none; perspective: 1400px; }
+.deal-deck, .deal-half, .deal-card, .deal-first-discard { position: absolute; top: 50%; left: 50%; width: var(--card-w); aspect-ratio: 5 / 7; border: var(--line) solid var(--color-onyx); border-radius: var(--radius-sm); overflow: hidden; box-shadow: 0 calc(.5 * var(--u)) calc(.8 * var(--u)) #000a; }
+.deal-deck > *, .deal-half > *, .deal-card > *, .deal-first-discard > * { width: 100%; height: 100%; object-fit: cover; }
+/* Deck: slide in from the left (0–.6s), hold through the shuffle, then travel to
+   the draw slot (3.6s). */
+.deal-deck { z-index: 3; animation: deal-slide-in .9s cubic-bezier(.2,.8,.3,1) both, deal-to-slot .6s ease-in var(--deck-slot-delay, 3.6s) both; }
+/* Two halves riffle together twice over the shuffle window (.6s–1.8s). */
+.deal-half { z-index: 4; opacity: 0; }
+.deal-half-a { animation: riffle-a 1.2s ease-in-out .6s both; }
+.deal-half-b { animation: riffle-b 1.2s ease-in-out .6s both; }
+.deal-card { z-index: 5; animation: deal-card-flight .5s cubic-bezier(.25,.7,.3,1) var(--deal-delay) both; }
+.deal-first-discard { z-index: 6; backface-visibility: hidden; animation: deal-discard .7s ease 4.4s both; }
 @keyframes target-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.4); } }
 @keyframes urgent-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @keyframes event-in { from { opacity: 0; transform: translateX(.6rem); } to { opacity: 1; transform: none; } }
-@keyframes deal-deck-appear { from { opacity: 0; transform: translate(-50%, -50%) scale(.55) rotate(-8deg); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@keyframes deal-card-flight { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--target-x)), calc(-50% + var(--target-y))) rotate(var(--target-r)); } }
-@keyframes deal-rest { 0% { opacity: 0; transform: translate(-50%, -50%); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% - 40vw), calc(-50% + 2vh)) scale(.9); } }
-@keyframes deal-discard { 0% { opacity: 0; transform: translate(-50%, -50%) rotateY(180deg); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + 40vw), calc(-50% + 2vh)) rotateY(0); } }
+@keyframes deal-slide-in { 0% { opacity: 0; transform: translate(calc(-50% - 48vw), -50%) rotate(-14deg); } 60% { opacity: 1; } 100% { opacity: 1; transform: translate(-50%, -50%) rotate(0); } }
+@keyframes deal-to-slot { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(calc(-50% - 40vw), -50%) scale(.9); } }
+@keyframes riffle-a { 0%, 100% { opacity: 0; transform: translate(-50%, -50%); } 12%, 88% { opacity: 1; } 25% { transform: translate(calc(-50% - 9%), calc(-50% - 4%)) rotate(-7deg); } 50% { transform: translate(-50%, -50%) rotate(0); } 75% { transform: translate(calc(-50% - 9%), calc(-50% - 4%)) rotate(-7deg); } }
+@keyframes riffle-b { 0%, 100% { opacity: 0; transform: translate(-50%, -50%); } 12%, 88% { opacity: 1; } 25% { transform: translate(calc(-50% + 9%), calc(-50% + 4%)) rotate(7deg); } 50% { transform: translate(-50%, -50%) rotate(0); } 75% { transform: translate(calc(-50% + 9%), calc(-50% + 4%)) rotate(7deg); } }
+@keyframes deal-card-flight { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.98); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--target-x)), calc(-50% + var(--target-y))) rotate(var(--target-r)) scale(.9); } }
+@keyframes deal-discard { 0% { opacity: 0; transform: translate(-50%, -50%) rotateY(180deg); } 20% { opacity: 1; } 100% { opacity: 1; transform: translate(calc(-50% + 40vw), -50%) rotateY(0); } }
 /* Reduced motion keeps every cue, only without travel: flights pulse in place
    (see CardFlight) and the deal collapses to a short fade. Hiding them outright
    would leave the board untraceable, which is the opposite of the intent. */
 @media (prefers-reduced-motion: reduce) {
   .is-target, .turn-countdown.is-urgent { animation: none; }
-  .playing-card { transition: none; }
-  .deal-card, .deal-rest-deck, .deal-first-discard { display: none; }
+  /* The card lift is a tiny, non-disorienting state change, so it keeps its
+     transition even here; only the large cross-screen travel is reduced. */
+  .deal-card, .deal-half, .deal-first-discard { display: none; }
   .deal-animation { animation: deal-reduced .5s ease-out both; }
   .deal-deck { animation: none; }
 }

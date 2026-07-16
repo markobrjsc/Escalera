@@ -64,7 +64,7 @@ export function drawCard(rawState: GameState, userId: string, source: DrawSource
   return state;
 }
 
-export function layPhase(rawState: GameState, userId: string, combinationCardIds: readonly (readonly string[])[]) {
+export function layPhase(rawState: GameState, userId: string, combinationCardIds: readonly (readonly string[])[], random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper), now = Date.now()) {
   const state = normalizeGameState(rawState);
   const current = activePlayer(state, userId);
   requireDrawn(state);
@@ -81,6 +81,8 @@ export function layPhase(rawState: GameState, userId: string, combinationCardIds
   current.metrics.jokersPlayed += combinations.flat().filter((card) => card.kind === "joker").length;
   for (const cards of combinations) state.melds.push({ id: randomUUID(), ownerId: userId, type: state.phase === 7 ? "street" : "group", cards, sameSuit: state.phase === 7 });
   if (state.phase === 7) for (const cards of combinations) trackStreet(current, "street", cards.length);
+  // Laying the final card ends the round just like discarding the last one would.
+  if (!current.hand.length) return completeRound(state, userId, random, now);
   return state;
 }
 
@@ -90,7 +92,7 @@ function trackStreet(player: { metrics: { longestStreet: number } }, type: "grou
   if (type === "street") player.metrics.longestStreet = Math.max(player.metrics.longestStreet, length);
 }
 
-export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: readonly string[], streetsRequireSameSuit: boolean) {
+export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: readonly string[], streetsRequireSameSuit: boolean, random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper), now = Date.now()) {
   const state = normalizeGameState(rawState);
   const current = activePlayer(state, userId);
   requireDrawn(state);
@@ -104,10 +106,11 @@ export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: 
   current.metrics.jokersPlayed += cards.filter((card) => card.kind === "joker").length;
   state.melds.push({ id: randomUUID(), ownerId: userId, type: group.valid ? "group" : "street", cards, sameSuit: group.valid ? false : streetsRequireSameSuit });
   trackStreet(current, group.valid ? "group" : "street", cards.length);
+  if (!current.hand.length) return completeRound(state, userId, random, now);
   return state;
 }
 
-export function addCardToMeld(rawState: GameState, userId: string, meldId: string, cardId: string) {
+export function addCardToMeld(rawState: GameState, userId: string, meldId: string, cardId: string, random: (upperExclusive: number) => number = (upper) => Math.floor(Math.random() * upper), now = Date.now()) {
   const state = normalizeGameState(rawState);
   const current = activePlayer(state, userId);
   requireDrawn(state);
@@ -122,6 +125,7 @@ export function addCardToMeld(rawState: GameState, userId: string, meldId: strin
   current.hand = removeCards(current.hand, [card]);
   if (card.kind === "joker") current.metrics.jokersPlayed += 1;
   trackStreet(current, meld.type, cards.length);
+  if (!current.hand.length) return completeRound(state, userId, random, now);
   return state;
 }
 

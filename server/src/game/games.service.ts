@@ -100,6 +100,11 @@ export class GamesService {
     if (state.status === "FINISHED") {
       await this.statistics.recordFinishedGame(game.id, state);
       await this.lifecycle.finish(game.lobby.code);
+    } else if (state.roundResults.length > current.roundResults.length) {
+      // A round just ended without finishing the game: grant the winner their
+      // phase-win achievement immediately instead of waiting for phase 7.
+      const won = state.roundResults[state.roundResults.length - 1];
+      await this.statistics.recordPhaseWin(won.endedById, won.phase);
     }
     return { version: game.version + 1, state: toPlayerGameView(state, userId) };
   }

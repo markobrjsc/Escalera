@@ -41,7 +41,7 @@ describe("autoritärer Spielzug", () => {
     const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
     expect(phased.players[0].phaseLaid).toBe(true);
     expect(phased.melds[0].cards).toHaveLength(3);
-    const additional = layAdditionalMeld({ ...phased, players: phased.players.map((player) => player.userId === "p1" ? { ...player, hand: [card("8x", "8"), card("9x", "9"), card("10x", "10")] } : player) }, "p1", ["8x", "9x", "10x"], false);
+    const additional = layAdditionalMeld({ ...phased, players: phased.players.map((player) => player.userId === "p1" ? { ...player, hand: [card("8x", "8"), card("9x", "9"), card("10x", "10"), card("keep", "2")] } : player) }, "p1", ["8x", "9x", "10x"], false);
     expect(additional.melds[1].type).toBe("street");
   });
 
@@ -51,6 +51,28 @@ describe("autoritärer Spielzug", () => {
     phased.players[0].hand.push({ ...card("5extra", "5"), deck: 2 });
     const result = addCardToMeld(phased, "p1", phased.melds[0].id, "5extra");
     expect(result.melds[0].cards).toHaveLength(4);
+  });
+
+  it("beendet die Runde, wenn ein Spieler durch Auslegen seine letzte Karte loswird", () => {
+    const drawn = drawCard(baseState(), "p1", "draw");
+    const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
+    // Arm p1 with exactly a layable street so laying it empties the hand.
+    const armed = { ...phased, players: phased.players.map((player) => player.userId === "p1" ? { ...player, hand: [card("8x", "8"), card("9x", "9"), card("10x", "10")] } : player) };
+    const out = layAdditionalMeld(armed, "p1", ["8x", "9x", "10x"], false, () => 0);
+    expect(out.roundResults).toHaveLength(1);
+    expect(out.roundResults[0].endedById).toBe("p1");
+    expect(out.phase).toBe(2);
+    expect(out.players.every((player) => player.hand.length === 11)).toBe(true);
+  });
+
+  it("beendet die Runde auch, wenn die letzte Karte angelegt wird", () => {
+    const drawn = drawCard(baseState(), "p1", "draw");
+    const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
+    const armed = { ...phased, players: phased.players.map((player) => player.userId === "p1" ? { ...player, hand: [{ ...card("5last", "5"), deck: 2 as const }] } : player) };
+    const out = addCardToMeld(armed, "p1", phased.melds[0].id, "5last", () => 0);
+    expect(out.roundResults).toHaveLength(1);
+    expect(out.roundResults[0].endedById).toBe("p1");
+    expect(out.phase).toBe(2);
   });
 
   it("öffnet nach dem Abwerfen genau ein Kaufangebot und berechnet eine Münze", () => {

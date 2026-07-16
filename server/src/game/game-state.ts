@@ -67,6 +67,7 @@ export interface PlayerGameView {
   activePlayerId: string;
   drawPileCount: number;
   discardTop: GameCard | null;
+  discardPileCount: number;
   discardOffer: { available: boolean; cardId: string } | null;
   turn: { hasDrawn: boolean; canAct: boolean; deadlineAt: string | null };
   melds: GameMeld[];
@@ -139,6 +140,7 @@ export function toPlayerGameView(rawState: GameState, viewerId: string): PlayerG
     activePlayerId: state.activePlayerId,
     drawPileCount: state.drawPile.length,
     discardTop: state.discardPile.at(-1) ?? null,
+    discardPileCount: state.discardPile.length,
     discardOffer: state.discardOffer && viewerId !== state.activePlayerId && viewerId !== state.discardOffer.offeredById ? { available: true, cardId: state.discardOffer.cardId } : null,
     turn: { hasDrawn: state.turn.hasDrawn, canAct: viewerId === state.activePlayerId && !state.roundEndedById, deadlineAt: state.turn.deadlineAt },
     melds: state.melds,
