@@ -108,6 +108,10 @@ model UserStatistic {
   cardsBought     Int      @default(0)
   timeouts        Int      @default(0)
   reconnects      Int      @default(0)
+  movesPlayed     Int      @default(0)
+  coinPenalty     Int      @default(0)
+  longestStreet   Int      @default(0)
+  phaseWinsMask   Int      @default(0)
   updatedAt       DateTime @updatedAt
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
