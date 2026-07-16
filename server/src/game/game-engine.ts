@@ -60,6 +60,7 @@ export function drawCard(rawState: GameState, userId: string, source: DrawSource
     current.hand.push(state.drawPile.pop()!);
   }
   state.turn.hasDrawn = true;
+  current.metrics.movesPlayed += 1; // one draw begins each turn, so this counts turns played
   return state;
 }
 
@@ -79,7 +80,14 @@ export function layPhase(rawState: GameState, userId: string, combinationCardIds
   current.metrics.meldsLaid += combinations.length;
   current.metrics.jokersPlayed += combinations.flat().filter((card) => card.kind === "joker").length;
   for (const cards of combinations) state.melds.push({ id: randomUUID(), ownerId: userId, type: state.phase === 7 ? "street" : "group", cards, sameSuit: state.phase === 7 });
+  if (state.phase === 7) for (const cards of combinations) trackStreet(current, "street", cards.length);
   return state;
+}
+
+// Records the longest street a player has built, for the street-length branch of
+// the achievement tree. Only streets count; groups never advance it.
+function trackStreet(player: { metrics: { longestStreet: number } }, type: "group" | "street", length: number) {
+  if (type === "street") player.metrics.longestStreet = Math.max(player.metrics.longestStreet, length);
 }
 
 export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: readonly string[], streetsRequireSameSuit: boolean) {
@@ -95,6 +103,7 @@ export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: 
   current.metrics.meldsLaid += 1;
   current.metrics.jokersPlayed += cards.filter((card) => card.kind === "joker").length;
   state.melds.push({ id: randomUUID(), ownerId: userId, type: group.valid ? "group" : "street", cards, sameSuit: group.valid ? false : streetsRequireSameSuit });
+  trackStreet(current, group.valid ? "group" : "street", cards.length);
   return state;
 }
 
@@ -112,6 +121,7 @@ export function addCardToMeld(rawState: GameState, userId: string, meldId: strin
   meld.cards = cards;
   current.hand = removeCards(current.hand, [card]);
   if (card.kind === "joker") current.metrics.jokersPlayed += 1;
+  trackStreet(current, meld.type, cards.length);
   return state;
 }
 

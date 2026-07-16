@@ -3,12 +3,46 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service.js";
 import type { GameState } from "../game/game-state.js";
 
-export const ACHIEVEMENTS = [
-  { key: "games", title: "Stammspieler", field: "gamesPlayed", tiers: [1, 10, 50] },
-  { key: "wins", title: "Siegerstraße", field: "gamesWon", tiers: [1, 5, 20] },
-  { key: "phases", title: "Phasenprofi", field: "phasesLaid", tiers: [7, 35, 140] },
-  { key: "buyer", title: "Marktgänger", field: "cardsBought", tiers: [5, 25, 100] }
-] as const;
+// Every coin a player still holds at the end converts to penalty points; the
+// coin-penalty branch tracks the accumulated total across all games.
+const COIN_PENALTY = 30;
+
+type StatBag = {
+  gamesPlayed: number; gamesWon: number; podiumFinishes: number; totalPenalty: number;
+  phasesLaid: number; meldsLaid: number; jokersPlayed: number; cardsBought: number;
+  timeouts: number; reconnects: number; movesPlayed: number; coinPenalty: number;
+  longestStreet: number; phaseWinsMask: number;
+};
+
+type Branch = {
+  key: string;
+  title: string;
+  // "phase" nodes are independent bits in phaseWinsMask; "gte" nodes unlock once
+  // the backing stat reaches the threshold and stay unlocked.
+  kind: "phase" | "gte";
+  stat?: keyof StatBag;
+  nodes: number[];
+  label: (value: number) => string;
+};
+
+// The achievement tree: an empty root with these seven branches radiating out.
+export const ACHIEVEMENT_TREE: Branch[] = [
+  { key: "phases", title: "Phasen", kind: "phase", nodes: [1, 2, 3, 4, 5, 6, 7], label: (n) => `Phase ${n}` },
+  { key: "streets", title: "Straßen", kind: "gte", stat: "longestStreet", nodes: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], label: (n) => `Straße ${n}` },
+  { key: "wins", title: "Siege", kind: "gte", stat: "gamesWon", nodes: [1, 3, 5, 10, 25, 50, 100], label: (n) => `${n} ${n === 1 ? "Sieg" : "Siege"}` },
+  { key: "market", title: "Marktgänger", kind: "gte", stat: "cardsBought", nodes: [5, 25, 100], label: (n) => `${n} Käufe` },
+  { key: "penalty", title: "Strafpunkte", kind: "gte", stat: "totalPenalty", nodes: [50, 100, 500, 1000, 1500, 2000, 5000, 10000], label: (n) => `${n} Strafpunkte` },
+  { key: "coins", title: "Münz-Strafe", kind: "gte", stat: "coinPenalty", nodes: [60, 300, 600, 1200, 2400, 4800], label: (n) => `${n} aus Münzen` },
+  { key: "moves", title: "Züge", kind: "gte", stat: "movesPlayed", nodes: [50, 100, 200, 500, 1000], label: (n) => `${n} Züge` }
+];
+
+function nodeId(branch: Branch, node: number) { return `${branch.key}:${node}`; }
+function nodeUnlocked(branch: Branch, node: number, stats: StatBag): boolean {
+  return branch.kind === "phase" ? (stats.phaseWinsMask & (1 << (node - 1))) !== 0 : Number(stats[branch.stat!]) >= node;
+}
+function unlockedIds(stats: StatBag): string[] {
+  return ACHIEVEMENT_TREE.flatMap((branch) => branch.nodes.filter((node) => nodeUnlocked(branch, node, stats)).map((node) => nodeId(branch, node)));
+}
 
 @Injectable()
 export class StatisticsService {
@@ -20,11 +54,24 @@ export class StatisticsService {
         await tx.gameStatisticsRollup.create({ data: { gameId } });
         for (const player of state.players) {
           const placement = state.placements.find((entry) => entry.userId === player.userId)?.rank ?? state.players.length;
+          const wonPhases = state.roundResults.filter((round) => round.endedById === player.userId).reduce((mask, round) => mask | (1 << (round.phase - 1)), 0);
+          const before = await tx.userStatistic.findUnique({ where: { userId: player.userId } });
+          // longestStreet is a max and phaseWinsMask a bitwise OR, so both need a
+          // read-modify-write rather than Prisma's increment.
+          const merged = {
+            longestStreet: Math.max(before?.longestStreet ?? 0, player.metrics.longestStreet),
+            phaseWinsMask: (before?.phaseWinsMask ?? 0) | wonPhases
+          };
           await tx.userStatistic.upsert({
             where: { userId: player.userId },
-            create: { userId: player.userId, gamesPlayed: 1, gamesWon: placement === 1 ? 1 : 0, podiumFinishes: placement <= 3 ? 1 : 0, totalPenalty: player.totalPenalty, phasesLaid: player.metrics.phasesLaid, meldsLaid: player.metrics.meldsLaid, jokersPlayed: player.metrics.jokersPlayed, cardsBought: player.metrics.cardsBought, timeouts: player.timeouts, reconnects: player.disconnectSkips },
-            update: { gamesPlayed: { increment: 1 }, gamesWon: { increment: placement === 1 ? 1 : 0 }, podiumFinishes: { increment: placement <= 3 ? 1 : 0 }, totalPenalty: { increment: player.totalPenalty }, phasesLaid: { increment: player.metrics.phasesLaid }, meldsLaid: { increment: player.metrics.meldsLaid }, jokersPlayed: { increment: player.metrics.jokersPlayed }, cardsBought: { increment: player.metrics.cardsBought }, timeouts: { increment: player.timeouts }, reconnects: { increment: player.disconnectSkips } }
+            create: { userId: player.userId, gamesPlayed: 1, gamesWon: placement === 1 ? 1 : 0, podiumFinishes: placement <= 3 ? 1 : 0, totalPenalty: player.totalPenalty, phasesLaid: player.metrics.phasesLaid, meldsLaid: player.metrics.meldsLaid, jokersPlayed: player.metrics.jokersPlayed, cardsBought: player.metrics.cardsBought, timeouts: player.timeouts, reconnects: player.disconnectSkips, movesPlayed: player.metrics.movesPlayed, coinPenalty: player.coins * COIN_PENALTY, ...merged },
+            update: { gamesPlayed: { increment: 1 }, gamesWon: { increment: placement === 1 ? 1 : 0 }, podiumFinishes: { increment: placement <= 3 ? 1 : 0 }, totalPenalty: { increment: player.totalPenalty }, phasesLaid: { increment: player.metrics.phasesLaid }, meldsLaid: { increment: player.metrics.meldsLaid }, jokersPlayed: { increment: player.metrics.jokersPlayed }, cardsBought: { increment: player.metrics.cardsBought }, timeouts: { increment: player.timeouts }, reconnects: { increment: player.disconnectSkips }, movesPlayed: { increment: player.metrics.movesPlayed }, coinPenalty: { increment: player.coins * COIN_PENALTY }, ...merged }
           });
+
+          const after = await tx.userStatistic.findUniqueOrThrow({ where: { userId: player.userId } });
+          const already = new Set((await tx.achievementProgress.findMany({ where: { userId: player.userId }, select: { achievement: true } })).map((row) => row.achievement));
+          const fresh = unlockedIds(after as StatBag).filter((id) => !already.has(id));
+          if (fresh.length) await tx.achievementProgress.createMany({ data: fresh.map((achievement) => ({ userId: player.userId, achievement, progress: 1, unlockedAt: new Date() })) });
         }
       });
     } catch (error) {
@@ -35,13 +82,29 @@ export class StatisticsService {
   }
 
   async profile(userId: string) {
-    const stored = await this.prisma.userStatistic.findUnique({ where: { userId } });
-    const statistics = { gamesPlayed: stored?.gamesPlayed ?? 0, gamesWon: stored?.gamesWon ?? 0, podiumFinishes: stored?.podiumFinishes ?? 0, totalPenalty: stored?.totalPenalty ?? 0, phasesLaid: stored?.phasesLaid ?? 0, meldsLaid: stored?.meldsLaid ?? 0, jokersPlayed: stored?.jokersPlayed ?? 0, cardsBought: stored?.cardsBought ?? 0, timeouts: stored?.timeouts ?? 0, reconnects: stored?.reconnects ?? 0 };
-    const achievements = ACHIEVEMENTS.map((definition) => {
-      const value = Number(statistics[definition.field]);
-      const tier = definition.tiers.filter((threshold) => value >= threshold).length;
-      return { key: definition.key, title: definition.title, value, tier, tiers: definition.tiers, next: definition.tiers[tier] ?? null };
-    });
-    return { statistics, achievements };
+    const [stored, progress] = await Promise.all([
+      this.prisma.userStatistic.findUnique({ where: { userId } }),
+      this.prisma.achievementProgress.findMany({ where: { userId } })
+    ]);
+    const statistics: StatBag = {
+      gamesPlayed: stored?.gamesPlayed ?? 0, gamesWon: stored?.gamesWon ?? 0, podiumFinishes: stored?.podiumFinishes ?? 0,
+      totalPenalty: stored?.totalPenalty ?? 0, phasesLaid: stored?.phasesLaid ?? 0, meldsLaid: stored?.meldsLaid ?? 0,
+      jokersPlayed: stored?.jokersPlayed ?? 0, cardsBought: stored?.cardsBought ?? 0, timeouts: stored?.timeouts ?? 0,
+      reconnects: stored?.reconnects ?? 0, movesPlayed: stored?.movesPlayed ?? 0, coinPenalty: stored?.coinPenalty ?? 0,
+      longestStreet: stored?.longestStreet ?? 0, phaseWinsMask: stored?.phaseWinsMask ?? 0
+    };
+    const unlockedAt = new Map(progress.map((row) => [row.achievement, row.unlockedAt?.toISOString() ?? null]));
+    const tree = ACHIEVEMENT_TREE.map((branch) => ({
+      key: branch.key,
+      title: branch.title,
+      kind: branch.kind,
+      // Current progress for the branch's backing stat; drives the hover tooltip.
+      value: branch.kind === "gte" ? Number(statistics[branch.stat!]) : 0,
+      nodes: branch.nodes.map((node) => {
+        const id = nodeId(branch, node);
+        return { id, label: branch.label(node), threshold: node, unlocked: nodeUnlocked(branch, node, statistics), unlockedAt: unlockedAt.get(id) ?? null };
+      })
+    }));
+    return { statistics, tree };
   }
 }

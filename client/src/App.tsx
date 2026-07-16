@@ -20,7 +20,9 @@ type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: 
 type RoundResult = { round: number; phase: number; endedById: string; scores: Array<{ userId: string; penalty: number; totalPenalty: number }> };
 type FinalPlacement = { userId: string; rank: number; totalPenalty: number };
 type RecentGameAction = { commandId: string; userId: string; type: string; version: number; createdAt: string };
-type ProfileStatistics = { user: Pick<User, "id" | "username" | "avatarKey">; statistics: Record<string, number>; achievements: Array<{ key: string; title: string; value: number; tier: number; tiers: number[]; next: number | null }> };
+type AchievementNode = { id: string; label: string; threshold: number; unlocked: boolean; unlockedAt: string | null };
+type AchievementBranch = { key: string; title: string; kind: "phase" | "gte"; value: number; nodes: AchievementNode[] };
+type ProfileStatistics = { user: Pick<User, "id" | "username" | "avatarKey">; statistics: Record<string, number>; tree: AchievementBranch[] };
 type Game = {
   version: number;
   state: {
@@ -62,6 +64,20 @@ export function App() {
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [lobbyRevision, setLobbyRevision] = useState(0);
+  const [unlocks, setUnlocks] = useState<AchievementNode[]>([]);
+  const finishHandled = useRef<string | null>(null);
+
+  // When a game finishes the server has already written the unlocks, so we fetch
+  // our own tree once and surface any node unlocked in the last 30s as a toast.
+  useEffect(() => {
+    if (!user || game?.state.status !== "FINISHED" || !lobby) return;
+    const marker = `${lobby.code}-${game.version}`;
+    if (finishHandled.current === marker) return;
+    finishHandled.current = marker;
+    api<ProfileStatistics>(`/profile/users/${user.id}`)
+      .then((profile) => setUnlocks(profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlockedAt !== null && Date.now() - Date.parse(node.unlockedAt) < 30_000)))
+      .catch(() => undefined);
+  }, [game?.state.status, game?.version, lobby?.code, user?.id]);
 
   useEffect(() => {
     api<{ user: User }>("/auth/me").then(async (result) => {
@@ -102,7 +118,18 @@ export function App() {
     : lobby
       ? <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} onProfile={setProfileUserId} />
       : <LobbyListView user={user} connected={connected} revision={lobbyRevision} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileUserId(user.id)} />;
-  return <>{view}{profileUserId && <ProfileDialog viewer={user} userId={profileUserId} onUser={updateUser} onTutorial={() => { setProfileUserId(null); setTutorialOpen(true); }} onClose={() => setProfileUserId(null)} />}{tutorialOpen && <TutorialDialog user={user} onUser={updateUser} onClose={() => setTutorialOpen(false)} />}</>;
+  return <>{view}{profileUserId && <ProfileDialog viewer={user} userId={profileUserId} onUser={updateUser} onTutorial={() => { setProfileUserId(null); setTutorialOpen(true); }} onClose={() => setProfileUserId(null)} />}{tutorialOpen && <TutorialDialog user={user} onUser={updateUser} onClose={() => setTutorialOpen(false)} />}<AchievementToasts unlocks={unlocks} onDismiss={(id) => setUnlocks((current) => current.filter((node) => node.id !== id))} /></>;
+}
+
+// Unlock notifications: each fresh achievement pops top-right and dismisses itself
+// after ~8s. Purely presentational — the unlock itself is already persisted.
+function AchievementToasts({ unlocks, onDismiss }: { unlocks: AchievementNode[]; onDismiss: (id: string) => void }) {
+  useEffect(() => {
+    const timers = unlocks.map((node) => window.setTimeout(() => onDismiss(node.id), 8000));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [unlocks, onDismiss]);
+  if (!unlocks.length) return null;
+  return <div className="achievement-toasts" role="status" aria-live="polite">{unlocks.map((node) => <button className="achievement-toast" key={node.id} onClick={() => onDismiss(node.id)}><span className="toast-star" aria-hidden="true">★</span><div><strong>Erfolg freigeschaltet</strong><span>{node.label}</span></div></button>)}</div>;
 }
 
 function AccessView({ error, setError, onAccess }: { error: string; setError: (value: string) => void; onAccess: (user: User, created: boolean) => void }) {
@@ -390,6 +417,7 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [profile, setProfile] = useState<ProfileStatistics | null>(null);
+  const [treeOpen, setTreeOpen] = useState(false);
   useEffect(() => { api<ProfileStatistics>(`/profile/users/${userId}`).then(setProfile).catch((reason) => setError(message(reason))); }, [userId]);
   useEffect(() => {
     if (!file) { setPreview(null); return; }
@@ -413,7 +441,137 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
   const displayed = profile?.user ?? (viewer.id === userId ? viewer : { id: userId, username: "Spieler", avatarKey: null });
   const editable = viewer.id === userId;
   const avatar = preview ? <img src={preview} alt="Neue Profilbild-Vorschau" /> : <Avatar user={displayed} large />;
-  return <div className="dialog-backdrop"><section className="surface dialog profile-dialog"><div className="dialog-title"><div><p className="overline">{editable ? "Dein Konto" : "Spielerprofil"}</p><h2>Profil</h2></div><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><div className="profile-summary"><div className="profile-preview">{avatar}{editable && <><button className="avatar-edit-button" aria-label="Profilbild bearbeiten" onClick={() => setAvatarActions((open) => !open)}>✎</button>{avatarActions && <div className="avatar-actions"><label className="button button-primary">Hochladen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const selected = event.target.files?.[0]; if (selected) { setFile(selected); void upload(selected); } }} /></label><button disabled={!displayed.avatarKey || busy} className="button-danger" onClick={() => void remove()}>Löschen</button></div>}</>}</div><div><strong className="profile-name">{displayed.username}</strong>{profile && <div className="stat-grid"><span><b>{profile.statistics.gamesPlayed}</b> Spiele</span><span><b>{profile.statistics.gamesWon}</b> Siege</span><span><b>{profile.statistics.totalPenalty}</b> Strafpunkte</span><span><b>{profile.statistics.cardsBought}</b> Käufe</span></div>}</div></div>{profile && <div className="achievement-list">{profile.achievements.map((achievement) => <article key={achievement.key}><div><strong>{achievement.title}</strong><span>Stufe {achievement.tier}/3</span></div><progress value={achievement.value} max={achievement.next ?? Math.max(achievement.value, 1)} /><small>{achievement.next ? `${achievement.value} / ${achievement.next}` : "Vollständig"}</small></article>)}</div>}{error && <p className="error" role="alert">{error}</p>}</section></div>;
+  return <div className="dialog-backdrop"><section className="surface dialog profile-dialog"><div className="dialog-title"><div><p className="overline">{editable ? "Dein Konto" : "Spielerprofil"}</p><h2>Profil</h2></div><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><div className="profile-summary"><div className="profile-preview">{avatar}{editable && <><button className="avatar-edit-button" aria-label="Profilbild bearbeiten" onClick={() => setAvatarActions((open) => !open)}>✎</button>{avatarActions && <div className="avatar-actions"><label className="button button-primary">Hochladen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const selected = event.target.files?.[0]; if (selected) { setFile(selected); void upload(selected); } }} /></label><button disabled={!displayed.avatarKey || busy} className="button-danger" onClick={() => void remove()}>Löschen</button></div>}</>}</div><div><strong className="profile-name">{displayed.username}</strong>{profile && <div className="stat-grid"><span><b>{profile.statistics.gamesPlayed}</b> Spiele</span><span><b>{profile.statistics.gamesWon}</b> Siege</span><span><b>{profile.statistics.totalPenalty}</b> Strafpunkte</span><span><b>{profile.statistics.cardsBought}</b> Käufe</span></div>}</div></div>{profile && <button className="button achievements-open" onClick={() => setTreeOpen(true)}><span aria-hidden="true">✦</span> Erfolgsbaum ansehen<small>{profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlocked).length} / {profile.tree.flatMap((branch) => branch.nodes).length} freigeschaltet</small></button>}{error && <p className="error" role="alert">{error}</p>}</section>{treeOpen && profile && <AchievementTreeOverlay tree={profile.tree} username={displayed.username} onClose={() => setTreeOpen(false)} />}</div>;
+}
+
+function abbreviateThreshold(value: number) { return value >= 1000 ? `${value % 1000 === 0 ? value / 1000 : (value / 1000).toFixed(1)}k` : String(value); }
+
+const BRANCH_GLYPH: Record<string, string> = { phases: "❖", streets: "≣", wins: "★", market: "⛁", penalty: "⚠", coins: "◉", moves: "♟" };
+
+type NodePlacement = { branch: AchievementBranch; node: AchievementNode; index: number; x: number; y: number };
+type Tooltip = { node: AchievementNode; branch: AchievementBranch; x: number; y: number };
+
+// Hover text: what you have already achieved and what is still required.
+function tooltipLines(branch: AchievementBranch, node: AchievementNode): { done: string; need: string } {
+  if (node.unlocked) {
+    const when = node.unlockedAt ? new Date(node.unlockedAt).toLocaleDateString("de-DE") : null;
+    return { done: `Freigeschaltet${when ? ` am ${when}` : ""}`, need: "Erledigt ✓" };
+  }
+  if (branch.kind === "phase") return { done: "Noch nicht gewonnen", need: `Beende die Runde in Phase ${node.threshold} als Erster.` };
+  return { done: `Aktuell: ${branch.value} / ${node.threshold}`, need: `Noch ${node.threshold - branch.value} bis „${node.label}“.` };
+}
+
+// Minecraft-style advancement layout: an empty root on the left, one branch per
+// row flowing rightward, tiles joined by elbow connectors. Positions are pure px;
+// the surrounding PanZoom handles navigation.
+function AchievementTreeOverlay({ tree, username, onClose }: { tree: AchievementBranch[]; username: string; onClose: () => void }) {
+  const [tip, setTip] = useState<Tooltip | null>(null);
+  const tile = 64, colStep = 108, rowStep = 96, padX = 90, padY = 70;
+  const rootRow = (tree.length - 1) / 2;
+  const colX = (col: number) => padX + col * colStep;
+  const rowY = (row: number) => padY + row * rowStep;
+  const rootX = colX(0), rootY = rowY(rootRow);
+  const maxNodes = Math.max(...tree.map((branch) => branch.nodes.length));
+  const width = colX(maxNodes) + padX;
+  const height = rowY(tree.length - 1) + padY + tile;
+  const recent = (at: string | null) => at !== null && Date.now() - Date.parse(at) < 30_000;
+
+  const placements: NodePlacement[] = tree.flatMap((branch, row) => branch.nodes.map((node, index) => ({ branch, node, index, x: colX(index + 1), y: rowY(row) })));
+  const showTip = (placement: NodePlacement) => (event: React.PointerEvent | React.FocusEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setTip({ node: placement.node, branch: placement.branch, x: rect.left + rect.width / 2, y: rect.top });
+  };
+
+  return <div className="tree-overlay" role="dialog" aria-label={`Erfolgsbaum von ${username}`}>
+    <header className="tree-overlay-bar"><div><p className="overline">Erfolgsbaum</p><h2>{username}</h2></div><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></header>
+    <PanZoom className="tree-canvas-viewport" contentWidth={width} contentHeight={height}>
+      <div className="tree-canvas" style={{ width, height }}>
+        <svg className="tree-wires" width={width} height={height} aria-hidden="true">
+          {tree.map((branch, row) => {
+            const midX = (rootX + tile / 2 + colX(1) - tile / 2) / 2;
+            return <path className={`tree-wire ${branch.nodes[0]?.unlocked ? "is-live" : ""}`} key={`root-${branch.key}`} d={`M ${rootX + tile / 2} ${rootY} H ${midX} V ${rowY(row)} H ${colX(1) - tile / 2}`} />;
+          })}
+          {placements.filter((placement) => placement.index > 0).map((placement) => <line className={`tree-wire ${placement.node.unlocked ? "is-live" : ""}`} key={`w-${placement.node.id}`} x1={colX(placement.index) + tile / 2} y1={placement.y} x2={placement.x - tile / 2} y2={placement.y} />)}
+        </svg>
+        <div className="tree-tile is-root" style={{ left: rootX - tile / 2, top: rootY - tile / 2, width: tile, height: tile }} aria-hidden="true"><span>♠</span></div>
+        {tree.map((branch, row) => <span className="tree-row-title" key={`t-${branch.key}`} style={{ left: colX(1) - tile / 2, top: rowY(row) - tile / 2 - 20 }}>{branch.title}</span>)}
+        {placements.map((placement) => {
+          const { node, branch } = placement;
+          return <button
+            key={node.id}
+            className={`tree-tile ${node.unlocked ? "is-unlocked" : "is-locked"} ${recent(node.unlockedAt) ? "is-fresh" : ""}`}
+            style={{ left: placement.x - tile / 2, top: placement.y - tile / 2, width: tile, height: tile }}
+            onPointerEnter={showTip(placement)}
+            onFocus={showTip(placement)}
+            onPointerLeave={() => setTip(null)}
+            onBlur={() => setTip(null)}
+            aria-label={`${branch.title}: ${node.label}${node.unlocked ? ", freigeschaltet" : ", gesperrt"}`}
+          >
+            <span className="tree-tile-glyph" aria-hidden="true">{BRANCH_GLYPH[branch.key] ?? "◆"}</span>
+            <span className="tree-tile-value">{abbreviateThreshold(node.threshold)}</span>
+          </button>;
+        })}
+      </div>
+    </PanZoom>
+    {tip && <div className="tree-tooltip" style={{ left: tip.x, top: tip.y }} role="tooltip">
+      <strong>{tip.node.label}</strong>
+      <span className="tree-tooltip-branch">{tip.branch.title}</span>
+      {(() => { const lines = tooltipLines(tip.branch, tip.node); return <><span className="tree-tooltip-done">{lines.done}</span><span className="tree-tooltip-need">{lines.need}</span></>; })()}
+    </div>}
+    <p className="tree-hint muted">Ziehen zum Bewegen · Scrollen oder zwei Finger zum Zoomen</p>
+  </div>;
+}
+
+// Self-contained pan/zoom surface: drag (mouse + one finger) pans, wheel and
+// two-finger pinch zoom. Keeps content centred within a fixed viewport.
+function PanZoom({ children, className, contentWidth, contentHeight }: { children: React.ReactNode; className?: string; contentWidth: number; contentHeight: number }) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; scale: number } | null>(null);
+  const clampScale = (scale: number) => Math.min(2.5, Math.max(0.3, scale));
+
+  // Fit the whole tree on first mount so nothing starts off-screen.
+  useLayoutEffect(() => {
+    const box = viewport.current?.getBoundingClientRect();
+    if (!box) return;
+    const scale = clampScale(Math.min(box.width / contentWidth, box.height / contentHeight) * 0.96);
+    setView({ scale, x: (box.width - contentWidth * scale) / 2, y: (box.height - contentHeight * scale) / 2 });
+  }, [contentWidth, contentHeight]);
+
+  const zoomAt = (clientX: number, clientY: number, factor: number) => {
+    const box = viewport.current?.getBoundingClientRect(); if (!box) return;
+    setView((current) => {
+      const scale = clampScale(current.scale * factor);
+      const ratio = scale / current.scale;
+      const px = clientX - box.left, py = clientY - box.top;
+      return { scale, x: px - (px - current.x) * ratio, y: py - (py - current.y) * ratio };
+    });
+  };
+  const onWheel = (event: React.WheelEvent) => { event.preventDefault(); zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.12 : 1 / 1.12); };
+  const onPointerDown = (event: React.PointerEvent) => {
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size === 2) { const [a, b] = [...pointers.current.values()]; pinch.current = { distance: Math.hypot(a.x - b.x, a.y - b.y), scale: view.scale }; }
+  };
+  const onPointerMove = (event: React.PointerEvent) => {
+    const previous = pointers.current.get(event.pointerId); if (!previous) return;
+    const now = { x: event.clientX, y: event.clientY };
+    pointers.current.set(event.pointerId, now);
+    if (pointers.current.size >= 2 && pinch.current) {
+      const [a, b] = [...pointers.current.values()];
+      const distance = Math.hypot(a.x - b.x, a.y - b.y);
+      zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, (distance / pinch.current.distance) * (pinch.current.scale / view.scale));
+      pinch.current.distance = distance; pinch.current.scale = view.scale;
+      return;
+    }
+    setView((current) => ({ ...current, x: current.x + (now.x - previous.x), y: current.y + (now.y - previous.y) }));
+  };
+  const endPointer = (event: React.PointerEvent) => { pointers.current.delete(event.pointerId); if (pointers.current.size < 2) pinch.current = null; };
+
+  return <div ref={viewport} className={`panzoom ${className ?? ""}`} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}>
+    <div className="panzoom-content" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>{children}</div>
+  </div>;
 }
 
 const TUTORIAL_STEPS = [

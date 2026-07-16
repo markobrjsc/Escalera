@@ -32,11 +32,47 @@
 .profile-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-3); }
 .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; margin-top: .5rem; }
 .stat-grid span { display: grid; border: 1px solid var(--color-teal); padding: .35rem; font-size: var(--font-xs); }
-.achievement-list { display: grid; grid-template-columns: 1fr; gap: .4rem; }
-.achievement-list article { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .35rem .7rem; border: 1px solid var(--color-muted); padding: .55rem; font-size: var(--font-xs); }
-.achievement-list article > div { display: grid; gap: .1rem; }.achievement-list article span, .achievement-list article small { color: var(--color-muted); }
-.achievement-list article progress { grid-column: 1 / -1; }
-.achievement-list progress { width: 100%; accent-color: var(--color-teal); }
+.achievements-open { display: grid; width: 100%; gap: .1rem; padding-block: var(--space-2); border-color: var(--color-teal); }
+.achievements-open small { color: var(--color-muted); font-size: var(--font-xs); font-weight: 700; }
+
+/* Full-screen advancement card: a bordered window over a tiled dark backdrop. */
+.tree-overlay { position: fixed; inset: 0; z-index: 96; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #0d0d0df6; }
+.tree-overlay-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-muted); }
+.tree-overlay-bar h2 { margin: 0; font-size: var(--font-lg); }
+.tree-hint { margin: 0; padding: .4rem; text-align: center; font-size: var(--font-xs); border-top: 1px solid var(--color-muted); }
+.panzoom { position: relative; overflow: hidden; touch-action: none; cursor: grab; background-color: #14100c; background-image: repeating-linear-gradient(0deg, #ffffff08 0 1px, transparent 1px 44px), repeating-linear-gradient(90deg, #ffffff08 0 1px, transparent 1px 44px), radial-gradient(circle at 30% 20%, #2a1d12 0, #0f0b08 70%); }
+.panzoom:active { cursor: grabbing; }
+.panzoom-content { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+.tree-canvas { position: relative; }
+.tree-wires { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.tree-wire { fill: none; stroke: #6b5836; stroke-width: 3; }
+.tree-wire.is-live { stroke: var(--color-ready); }
+.tree-row-title { position: absolute; color: var(--color-muted); font-family: var(--font-display); font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+.tree-tile { position: absolute; display: grid; place-items: center; min-width: 0; min-height: 0; padding: 0; border: 3px solid #6b5836; border-radius: 6px; background: #241a10; color: var(--color-white); box-shadow: inset 0 0 0 2px #0006, 0 2px 4px #0008; }
+.tree-tile.is-root { border-color: var(--color-teal); border-style: dashed; background: #101614; color: var(--color-teal); font-size: 1.6rem; }
+.tree-tile.is-locked { border-color: #4a4033; background: #1a1610; color: var(--color-muted); opacity: .8; }
+.tree-tile.is-unlocked { border-color: var(--color-ready); background: #16241d; box-shadow: inset 0 0 0 2px #0006, 0 0 10px #8cd6b355; }
+.tree-tile:focus-visible { outline: 3px solid var(--color-teal); outline-offset: 2px; }
+.tree-tile-glyph { font-size: 1.5rem; line-height: 1; }
+.tree-tile.is-unlocked .tree-tile-glyph { color: var(--color-ready); }
+.tree-tile-value { font-size: .7rem; font-weight: 900; }
+.tree-tile.is-fresh { animation: tree-pop 1.3s ease-in-out infinite; }
+@keyframes tree-pop { 0%, 100% { box-shadow: inset 0 0 0 2px #0006, 0 0 10px #8cd6b355; } 50% { box-shadow: inset 0 0 0 2px #0006, 0 0 18px #8cd6b3cc; } }
+.tree-tooltip { position: fixed; z-index: 97; display: grid; gap: .15rem; width: max-content; max-width: 16rem; padding: var(--space-2); border: 1px solid var(--color-teal); border-radius: var(--radius-md); background: var(--color-onyx); box-shadow: 0 .4rem 1.2rem #000a; transform: translate(-50%, calc(-100% - 10px)); pointer-events: none; }
+.tree-tooltip strong { font-size: var(--font-sm); }
+.tree-tooltip-branch { color: var(--color-teal); font-size: var(--font-xs); font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.tree-tooltip-done { color: var(--color-ready); font-size: var(--font-xs); }
+.tree-tooltip-need { color: var(--color-muted); font-size: var(--font-xs); }
+@media (prefers-reduced-motion: reduce) { .tree-tile.is-fresh { animation: none; } }
+
+.achievement-toasts { position: fixed; top: max(var(--space-3), env(safe-area-inset-top)); right: max(var(--space-3), env(safe-area-inset-right)); z-index: 95; display: grid; gap: var(--space-1); width: min(88vw, 20rem); pointer-events: none; }
+.achievement-toast { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2); width: 100%; min-height: 0; border: 1px solid var(--color-ready); border-radius: var(--radius-md); padding: var(--space-2); background: var(--color-onyx); text-align: left; pointer-events: auto; animation: toast-in .3s ease-out both; }
+.achievement-toast .toast-star { color: var(--color-waiting); font-size: 1.5rem; line-height: 1; }
+.achievement-toast > div { display: grid; min-width: 0; gap: .1rem; }
+.achievement-toast strong { color: var(--color-ready); font-size: var(--font-xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.achievement-toast > div > span { overflow: hidden; color: var(--color-white); font-size: var(--font-sm); text-overflow: ellipsis; white-space: nowrap; }
+@keyframes toast-in { from { opacity: 0; transform: translateX(1rem); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .achievement-toast { animation: none; } }
 .profile-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .lobby-list-content { display: grid; height: calc(100% - clamp(3.5rem, 10dvh, 5rem)); grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: var(--space-2); padding-top: var(--space-3); }
 .welcome-row { display: grid; justify-items: center; gap: .3rem; }
