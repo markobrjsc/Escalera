@@ -209,6 +209,9 @@
    the card and read as a second, detached pile. Offsetting this body slightly
    right/down exposes a believable striped front and right card edge. */
 .pile-stack::before { content: ""; position: absolute; z-index: 0; left: calc(.13 * var(--u)); right: calc(-.36 * var(--u)); top: calc(.16 * var(--u)); bottom: calc(-1 * var(--depth)); border: 1px solid #aaa99f; border-radius: calc(.16 * var(--u)) calc(.45 * var(--u)) calc(.52 * var(--u)) calc(.32 * var(--u)); background: linear-gradient(105deg, #fbfbf4 0%, #d6d6cc 7%, #f4f4eb 18%, #babab2 47%, #f1f1e8 73%, #a5a59d 100%), repeating-linear-gradient(to bottom, transparent 0 2px, #77776f66 2px 3px); box-shadow: calc(.28 * var(--u)) calc(.45 * var(--u)) calc(.7 * var(--u)) #000c; }
+/* A thin dark rim at the exposed lower/right edge gives the deck a single
+   grounded silhouette at every count instead of a second card-shaped shadow. */
+.pile-stack::after { content: ""; position: absolute; z-index: 0; left: calc(.22 * var(--u)); right: calc(-.31 * var(--u)); bottom: calc(-1 * var(--depth)); height: max(1px, calc(.13 * var(--u))); border-radius: 0 0 calc(.5 * var(--u)) calc(.45 * var(--u)); background: #54544f; box-shadow: 0 1px 0 #eeeee5aa inset; }
 .pile-stack.is-empty::before { display: none; }
 .pile-stack.is-empty { display: grid; place-items: center; }
 .pile-layer, .pile-top { position: absolute; inset: 0; border-radius: inherit; transform: translate(var(--layer-x, 0), var(--layer-y, 0)) rotate(var(--layer-r, 0deg)); }
