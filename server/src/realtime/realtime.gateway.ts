@@ -81,7 +81,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private async emitGameToPlayer(code: string, userId: string) {
     try {
       const game = await this.lobbies.getGameView(userId, code);
-      this.server.to(this.playerRoom(code, userId)).emit("game:update", game);
+      // Include the authoritative room identity. A packet already queued for a
+      // socket may arrive just after that client left and joined another lobby;
+      // without the code, a high old version could poison the new lobby's
+      // monotonic client-side version gate.
+      this.server.to(this.playerRoom(code, userId)).emit("game:update", { code: code.toUpperCase(), game });
     } catch {
       // Vor dem Spielstart gibt es bewusst noch keinen privaten Spielzustand.
     }

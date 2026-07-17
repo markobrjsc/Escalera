@@ -142,7 +142,7 @@ export function discardCard(rawState: GameState, userId: string, cardId: string,
   }
   const index = state.players.findIndex((entry) => entry.userId === userId);
   state.activePlayerId = state.players[(index + 1) % state.players.length].userId;
-  state.turn = { hasDrawn: false, deadlineAt: nextTurnDeadline(state.maxTurnSeconds, now) };
+  state.turn = { hasDrawn: false, opensAt: null, deadlineAt: nextTurnDeadline(state.maxTurnSeconds, now) };
   return state;
 }
 
@@ -206,7 +206,7 @@ function completeRound(state: GameState, endedById: string, random: (upperExclus
   state.drawPile = cards;
   state.discardPile = [discardTop];
   state.melds = [];
-  state.turn = { hasDrawn: false, deadlineAt: nextTurnDeadline(state.maxTurnSeconds, now) };
+  state.turn = { hasDrawn: false, opensAt: null, deadlineAt: nextTurnDeadline(state.maxTurnSeconds, now) };
   state.roundEndedById = null;
   return state;
 }

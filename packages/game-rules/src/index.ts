@@ -19,6 +19,34 @@ export interface JokerCard {
 
 export type Card = StandardCard | JokerCard;
 
+/**
+ * Shared timing contract for the initial gamefield choreography. Keeping these
+ * values in the rules package lets the client timeline and the authoritative
+ * server start barrier use the same duration.
+ */
+export const GAME_START_TIMING_MS = {
+  matchIntro: 2_100,
+  introDealOverlap: 600,
+  deckDrop: 750,
+  deckShuffle: 2_250,
+  dealStep: 95,
+  dealFlight: 460,
+  finishTail: 900
+} as const;
+
+export const INITIAL_HAND_SIZE = 11;
+
+export function gameStartDurationMs(playerCount: number): number {
+  if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 6) throw new RangeError("Eine Partie benötigt zwei bis sechs Spieler.");
+  const dealStart = GAME_START_TIMING_MS.matchIntro - GAME_START_TIMING_MS.introDealOverlap
+    + GAME_START_TIMING_MS.deckDrop
+    + GAME_START_TIMING_MS.deckShuffle;
+  return dealStart
+    + playerCount * INITIAL_HAND_SIZE * GAME_START_TIMING_MS.dealStep
+    + GAME_START_TIMING_MS.dealFlight
+    + GAME_START_TIMING_MS.finishTail;
+}
+
 export interface ValidationResult {
   valid: boolean;
   reason?: string;

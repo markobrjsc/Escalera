@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardPoints, handPoints, validateGroup, validatePhase, validateStreet, type Card, type Rank, type Suit } from "../src/index.js";
+import { cardPoints, GAME_START_TIMING_MS, gameStartDurationMs, handPoints, INITIAL_HAND_SIZE, validateGroup, validatePhase, validateStreet, type Card, type Rank, type Suit } from "../src/index.js";
 
 const card = (rank: Rank, suit: Suit, deck: 1 | 2 = 1): Card => ({ id: `${rank}-${suit}-${deck}`, rank, suit, deck, kind: "standard" });
 const joker: Card = { id: "joker-1", kind: "joker" };
@@ -11,6 +11,29 @@ describe("Kartenwerte", () => {
     expect(cardPoints(card("A", "clubs"))).toBe(15);
     expect(cardPoints(joker)).toBe(30);
     expect(handPoints([card("7", "clubs"), card("A", "hearts"), joker])).toBe(50);
+  });
+});
+
+describe("gemeinsamer Spielstart-Zeitplan", () => {
+  it("deckt Intro, überlappenden Deck-Einflug, Mischen, Rundum-Geben und Ausklang ab", () => {
+    expect(GAME_START_TIMING_MS).toEqual({
+      matchIntro: 2_100,
+      introDealOverlap: 600,
+      deckDrop: 750,
+      deckShuffle: 2_250,
+      dealStep: 95,
+      dealFlight: 460,
+      finishTail: 900
+    });
+    expect(INITIAL_HAND_SIZE).toBe(11);
+    expect(gameStartDurationMs(2)).toBe(7_950);
+    expect(gameStartDurationMs(6)).toBe(12_130);
+  });
+
+  it("weist Spielerzahlen außerhalb des unterstützten Bereichs zurück", () => {
+    expect(() => gameStartDurationMs(1)).toThrow(RangeError);
+    expect(() => gameStartDurationMs(2.5)).toThrow(RangeError);
+    expect(() => gameStartDurationMs(7)).toThrow(RangeError);
   });
 });
 

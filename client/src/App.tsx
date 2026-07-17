@@ -1,11 +1,18 @@
 import { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { validateGroup, validatePhase, validateStreet } from "@escalera/game-rules";
+import { GAME_START_TIMING_MS, INITIAL_HAND_SIZE, validateGroup, validatePhase, validateStreet } from "@escalera/game-rules";
 import type { Card, Phase } from "@escalera/game-rules";
+import { CARD_BACK, CardFace, cardAsset, cardLabel, cardSort, PileStack } from "./cards.js";
+import { BOARD_TILT, DealStage, DEAL_TIMING, FlightLayer, MatchStartOverlay, MATCH_INTRO_MS, MATCH_INTRO_REDUCED_MS, SlideStage, fitCardRect, usePrefersReducedMotion } from "./fx.js";
+import type { FlightSpec, Rect } from "./fx.js";
 
 const API_URL = "/api";
 const SOCKET_URL = window.location.origin;
-const CARD_BACK = "/cards/CB.png";
+
+function hasSessionFlag(key: string | null) {
+  if (!key) return false;
+  try { return sessionStorage.getItem(key) === "1"; } catch { return false; }
+}
 
 type User = { id: string; username: string; avatarKey: string | null; tutorialCompleted: boolean };
 type Lobby = {
@@ -19,7 +26,7 @@ type Lobby = {
 type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: Card[]; sameSuit: boolean };
 type RoundResult = { round: number; phase: number; endedById: string; scores: Array<{ userId: string; penalty: number; totalPenalty: number }> };
 type FinalPlacement = { userId: string; rank: number; totalPenalty: number };
-type RecentGameAction = { commandId: string; userId: string; type: string; version: number; createdAt: string };
+type RecentGameAction = { commandId: string; userId: string; type: string; version: number; createdAt: string; metadata?: { source?: "draw" | "discard"; includesDraw?: boolean; includesDiscard?: boolean } };
 type AchievementNode = { id: string; label: string; threshold: number; unlocked: boolean; unlockedAt: string | null };
 type AchievementBranch = { key: string; title: string; kind: "phase" | "gte"; value: number; nodes: AchievementNode[] };
 type ProfileStatistics = { user: Pick<User, "id" | "username" | "avatarKey">; statistics: Record<string, number>; tree: AchievementBranch[] };
@@ -34,7 +41,7 @@ type Game = {
     discardTop: Card | null;
     discardPileCount: number;
     discardOffer: { available: boolean; cardId: string } | null;
-    turn: { hasDrawn: boolean; canAct: boolean; deadlineAt: string | null };
+    turn: { hasDrawn: boolean; canAct: boolean; opensAt: string | null; deadlineAt: string | null };
     melds: GameMeld[];
     roundEndedById: string | null;
     lastRoundResult: RoundResult | null;
@@ -55,6 +62,7 @@ async function api<T>(path: string, options: RequestInit = {}) {
 class ApiError extends Error { constructor(message: string, readonly body: unknown) { super(message); } }
 
 export function App() {
+  const reduced = usePrefersReducedMotion();
   const [user, setUser] = useState<User | null>(null);
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [game, setGame] = useState<Game | null>(null);
@@ -67,6 +75,34 @@ export function App() {
   const [lobbyRevision, setLobbyRevision] = useState(0);
   const [unlocks, setUnlocks] = useState<AchievementNode[]>([]);
   const achievementsSeen = useRef<string | null>(null);
+  const lobbyScope = useRef<string | null>(null);
+  const acceptedGame = useRef<{ code: string; version: number } | null>(null);
+
+  // HTTP responses and realtime packets share one monotonic gate. Entering a
+  // different lobby deliberately starts a fresh version scope; late results
+  // from the previous lobby can no longer restore its game on screen.
+  const enterLobbyScope = useCallback((code: string) => {
+    const normalized = code.toUpperCase();
+    if (lobbyScope.current !== normalized) {
+      lobbyScope.current = normalized;
+      acceptedGame.current = null;
+      setGame(null);
+    }
+    return normalized;
+  }, []);
+  const resetLobbyScope = useCallback(() => {
+    lobbyScope.current = null;
+    acceptedGame.current = null;
+    setGame(null);
+  }, []);
+  const acceptGame = useCallback((code: string, next: Game) => {
+    const normalized = code.toUpperCase();
+    if (lobbyScope.current !== normalized) return;
+    const accepted = acceptedGame.current;
+    if (accepted?.code === normalized && next.version < accepted.version) return;
+    acceptedGame.current = { code: normalized, version: next.version };
+    setGame(next);
+  }, []);
 
   // The server writes unlocks both at game end and the moment a round is won, so
   // we refetch our own tree on either event and toast anything freshly unlocked.
@@ -88,24 +124,26 @@ export function App() {
       setUser(result.user);
       const current = await api<Lobby | null>("/lobbies/current");
       if (!current) return;
+      enterLobbyScope(current.code);
       setLobby(current);
-      if (current.status !== "OPEN") setGame(await api<Game>(`/lobbies/${current.code}/game`));
+      if (current.status !== "OPEN") acceptGame(current.code, await api<Game>(`/lobbies/${current.code}/game`));
     }).catch(() => undefined).finally(() => setLoading(false));
-  }, []);
+  }, [acceptGame, enterLobbyScope]);
   useEffect(() => {
     if (!user) return;
     const live = io(`${SOCKET_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
     live.on("realtime:connected", () => { setConnected(true); setSocket(live); }); live.on("disconnect", () => { setConnected(false); setSocket(null); });
-    live.on("lobby:update", (value: Lobby) => setLobby(value)); live.on("game:update", (value: Game) => setGame(value));
+    live.on("lobby:update", (value: Lobby) => { if (lobbyScope.current === value.code.toUpperCase()) setLobby(value); });
+    live.on("game:update", (value: { code: string; game: Game }) => acceptGame(value.code, value.game));
     live.on("lobbies:update", () => setLobbyRevision((value) => value + 1));
-    live.on("lobby:deleted", () => { setLobby(null); setGame(null); setError("Die Lobby wurde wegen Inaktivität geschlossen."); });
+    live.on("lobby:deleted", (value: { code?: string }) => { if (value.code?.toUpperCase() !== lobbyScope.current) return; setLobby(null); resetLobbyScope(); setError("Die Lobby wurde wegen Inaktivität geschlossen."); });
     return () => { live.disconnect(); setSocket(null); setConnected(false); };
-  }, [user]);
+  }, [acceptGame, resetLobbyScope, user]);
   useEffect(() => { if (!socket || !lobby?.code) return; socket.emit("lobby:watch", { code: lobby.code }); return () => { socket.emit("lobby:unwatch", { code: lobby.code }); }; }, [socket, lobby?.code]);
 
-  const openLobby = async (code: string) => { const value = await api<Lobby>(`/lobbies/${code}`); setLobby(value); if (value.status === "ACTIVE") setGame(await api<Game>(`/lobbies/${code}/game`)); };
-  const leaveLobby = async () => { if (!lobby) return; await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" }); setLobby(null); setGame(null); };
-  const logout = async () => { await api("/auth/logout", { method: "POST", body: "{}" }); setUser(null); setLobby(null); setGame(null); setError(""); };
+  const openLobby = async (code: string) => { const value = await api<Lobby>(`/lobbies/${code}`); enterLobbyScope(value.code); setLobby(value); if (value.status === "ACTIVE") acceptGame(value.code, await api<Game>(`/lobbies/${value.code}/game`)); };
+  const leaveLobby = async () => { if (!lobby) return; await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" }); setLobby(null); resetLobbyScope(); };
+  const logout = async () => { await api("/auth/logout", { method: "POST", body: "{}" }); setUser(null); setLobby(null); resetLobbyScope(); setError(""); };
   const updateUser = (next: User) => {
     setUser(next);
     setLobby((current) => current ? {
@@ -115,14 +153,47 @@ export function App() {
     } : current);
   };
 
+  // One key per screen drives the slide transitions (#50). The match intro is
+  // intentionally derived from *committed* views after bootstrap: deriving it
+  // while /auth/me hydrates would replay "Alle Spieler bereit" on every reload
+  // of an already active game.
+  const viewKey = !user ? "access" : game && lobby && lobby.status !== "OPEN" ? "game" : lobby ? "lobby" : "list";
+  const committedView = useRef<string | null>(null);
+  const [matchIntro, setMatchIntro] = useState(false);
+  useLayoutEffect(() => {
+    if (loading) return;
+    const previous = committedView.current;
+    committedView.current = viewKey;
+    if (previous !== "lobby" || viewKey !== "game") return;
+    setProfileUserId(null);
+    setTutorialOpen(false);
+    setMatchIntro(true);
+  }, [loading, viewKey]);
+  useEffect(() => {
+    if (!matchIntro) return;
+    const timer = window.setTimeout(() => setMatchIntro(false), reduced ? MATCH_INTRO_REDUCED_MS : MATCH_INTRO_MS);
+    return () => window.clearTimeout(timer);
+  }, [matchIntro, reduced]);
+  // The login card only sweeps in on the very first screen of a session, not
+  // when a later logout slides back to it.
+  const [booted, setBooted] = useState(false);
+  useEffect(() => { if (viewKey !== "access") setBooted(true); }, [viewKey]);
+
   if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
-  if (!user) return <AccessView error={error} setError={setError} onAccess={(next, created) => { setUser(next); if (created) setTutorialOpen(true); }} />;
-  const view = game && lobby && lobby.status !== "OPEN"
-    ? <GameView user={user} lobby={lobby} game={game} connected={connected} onGame={setGame} onLeave={leaveLobby} onProfile={setProfileUserId} onTutorial={() => setTutorialOpen(true)} />
-    : lobby
-      ? <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} onProfile={setProfileUserId} />
-      : <LobbyListView user={user} connected={connected} revision={lobbyRevision} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileUserId(user.id)} />;
-  return <>{view}{profileUserId && <ProfileDialog viewer={user} userId={profileUserId} onUser={updateUser} onTutorial={() => { setProfileUserId(null); setTutorialOpen(true); }} onClose={() => setProfileUserId(null)} />}{tutorialOpen && <TutorialDialog user={user} onUser={updateUser} onClose={() => setTutorialOpen(false)} />}<AchievementToasts unlocks={unlocks} onDismiss={(id) => setUnlocks((current) => current.filter((node) => node.id !== id))} /></>;
+  const view = !user
+    ? <AccessView intro={!booted} error={error} setError={setError} onAccess={(next, created) => { setUser(next); if (created) setTutorialOpen(true); }} />
+    : game && lobby && lobby.status !== "OPEN"
+      ? <GameView user={user} lobby={lobby} game={game} connected={connected} introHold={matchIntro} onGame={(next) => acceptGame(lobby.code, next)} onLeave={leaveLobby} onProfile={setProfileUserId} onTutorial={() => setTutorialOpen(true)} />
+      : lobby
+        ? <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} onProfile={setProfileUserId} />
+        : <LobbyListView user={user} connected={connected} revision={lobbyRevision} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileUserId(user.id)} />;
+  return <>
+    <SlideStage viewKey={viewKey}>{view}</SlideStage>
+    {matchIntro && game && <MatchStartOverlay round={game.state.round} phase={game.state.phase} />}
+    {user && profileUserId && <ProfileDialog viewer={user} userId={profileUserId} onUser={updateUser} onTutorial={() => { setProfileUserId(null); setTutorialOpen(true); }} onClose={() => setProfileUserId(null)} />}
+    {user && tutorialOpen && <TutorialDialog user={user} onUser={updateUser} onClose={() => setTutorialOpen(false)} />}
+    <AchievementToasts unlocks={unlocks} onDismiss={(id) => setUnlocks((current) => current.filter((node) => node.id !== id))} />
+  </>;
 }
 
 // Unlock notifications: each fresh achievement pops top-right and dismisses itself
@@ -136,7 +207,7 @@ function AchievementToasts({ unlocks, onDismiss }: { unlocks: AchievementNode[];
   return <div className="achievement-toasts" role="status" aria-live="polite">{unlocks.map((node) => <button className="achievement-toast" key={node.id} onClick={() => onDismiss(node.id)}><span className="toast-star" aria-hidden="true">★</span><div><strong>Erfolg freigeschaltet</strong><span>{node.label}</span></div></button>)}</div>;
 }
 
-function AccessView({ error, setError, onAccess }: { error: string; setError: (value: string) => void; onAccess: (user: User, created: boolean) => void }) {
+function AccessView({ intro, error, setError, onAccess }: { intro: boolean; error: string; setError: (value: string) => void; onAccess: (user: User, created: boolean) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -155,32 +226,72 @@ function AccessView({ error, setError, onAccess }: { error: string; setError: (v
       if (exists) await access(false); else setRegistering(true);
     } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
   };
-  return <main className="portrait-view login-view"><Orientation portrait /><section className={`surface login-card ${registering ? "registration-card" : ""}`}><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => { setUsername(event.target.value); setRegistering(false); }} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => { setPassword(event.target.value); setRegistering(false); }} minLength={12} type="password" autoComplete={registering ? "new-password" : "current-password"} required /></label>{registering && <><label>Passwort wiederholen<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} type="password" autoComplete="new-password" required /></label><label className="registration-warning"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>Ich verstehe: Ohne dieses Passwort kann mein Konto nicht wiederhergestellt werden.</span></label></>}{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : registering ? "Konto verbindlich erstellen" : "Weiter"}</button>{registering && <button type="button" className="button-quiet" onClick={() => setRegistering(false)}>Zurück zur Anmeldung</button>}</form><p className="login-note muted">Ist dein Name noch frei, bestätigst du im nächsten Schritt bewusst die Registrierung.</p></section></main>;
+  return <main className={`portrait-view login-view ${intro ? "is-intro" : ""}`}><Orientation portrait /><section className={`surface login-card ${registering ? "registration-card" : ""}`}><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => { setUsername(event.target.value); setRegistering(false); }} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => { setPassword(event.target.value); setRegistering(false); }} minLength={12} type="password" autoComplete={registering ? "new-password" : "current-password"} required /></label>{registering && <><label>Passwort wiederholen<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} type="password" autoComplete="new-password" required /></label><label className="registration-warning"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>Ich verstehe: Ohne dieses Passwort kann mein Konto nicht wiederhergestellt werden.</span></label></>}{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : registering ? "Konto verbindlich erstellen" : "Weiter"}</button>{registering && <button type="button" className="button-quiet" onClick={() => setRegistering(false)}>Zurück zur Anmeldung</button>}</form><p className="login-note muted">Ist dein Name noch frei, bestätigst du im nächsten Schritt bewusst die Registrierung.</p></section></main>;
 }
 
 function LobbyListView({ user, connected, revision, error, setError, onLobby, onLogout, onProfile }: { user: User; connected: boolean; revision: number; error: string; setError: (value: string) => void; onLobby: (code: string) => Promise<void>; onLogout: () => Promise<void>; onProfile: () => void }) {
-  const [lobbies, setLobbies] = useState<Lobby[]>([]); const [search, setSearch] = useState(""); const [dialog, setDialog] = useState(false); const [busy, setBusy] = useState(false);
-  const refresh = async (query = search) => { try { setLobbies(await api<Lobby[]>(`/lobbies?search=${encodeURIComponent(query)}`)); } catch (reason) { setError(message(reason)); } };
-  useEffect(() => { void refresh(""); const timer = window.setInterval(() => void refresh(search), 10_000); return () => window.clearInterval(timer); }, []);
-  useEffect(() => { if (revision > 0) void refresh(search); }, [revision]);
+  const [lobbies, setLobbies] = useState<Lobby[]>([]); const [search, setSearch] = useState(""); const [dialog, setDialog] = useState(false); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(false);
+  const searchRef = useRef(search); searchRef.current = search;
+  const refresh = useCallback(async (query: string) => {
+    try { setLobbies(await api<Lobby[]>(`/lobbies?search=${encodeURIComponent(query)}`)); }
+    catch (reason) { setError(message(reason)); }
+    finally { setLoaded(true); }
+  }, [setError]);
+  useEffect(() => { void refresh(""); const timer = window.setInterval(() => void refresh(searchRef.current), 10_000); return () => window.clearInterval(timer); }, [refresh]);
+  useEffect(() => { if (revision > 0) void refresh(searchRef.current); }, [revision, refresh]);
   const join = async (code: string) => { setBusy(true); setError(""); try { await api(`/lobbies/${code}/join`, { method: "POST", body: "{}" }); await onLobby(code); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
-  return <main className="portrait-view lobby-list-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Abmelden" onClick={() => void onLogout()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={onProfile}><Avatar user={user} /></button></header><section className="lobby-list-content"><div className="welcome-row"><h2 className="welcome">Willkommen, {user.username}</h2><Connection connected={connected} /></div><hr className="lobby-divider" /><form className="lobby-tools" onSubmit={(event) => { event.preventDefault(); void refresh(); }}><input aria-label="Lobbys durchsuchen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Lobbyname …" /><button className="button-icon" aria-label="Suchen">⌕</button><button type="button" className="button-primary create-button" aria-label="Lobby erstellen" onClick={() => setDialog(true)}>+</button></form>{error && <p className="error">{error}</p>}<section className="surface lobby-browser"><div className="list-title"><h3>Offene Lobbys</h3><span className="badge">{lobbies.length}</span></div><div className="lobby-scroll">{lobbies.length ? lobbies.map((entry) => <article className="surface lobby-card" key={entry.code}><div className="lobby-card-info"><strong>{entry.name}</strong><div className="lobby-meta"><span className="lobby-pill">{entry.code}</span><span className="lobby-pill">{entry.players.length}/{entry.settings.maxPlayers} Spieler</span><span className="lobby-pill">Erstellt von {entry.host.username}</span></div></div><button className="join-button" disabled={busy} onClick={() => void join(entry.code)}>Beitreten</button></article>) : <div className="empty-state"><strong>Noch keine Lobby offen.</strong><span className="muted">Erstelle die erste Runde.</span></div>}</div></section></section>{dialog && <LobbySettingsDialog defaultName={`${user.username}'s Lobby`} onClose={() => setDialog(false)} onCreated={onLobby} setError={setError} />}</main>;
+  return <main className="portrait-view lobby-list-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Abmelden" onClick={() => void onLogout()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={onProfile}><Avatar user={user} /></button></header><section className="lobby-list-content"><div className="welcome-row"><h2 className="welcome">Willkommen, {user.username}</h2><Connection connected={connected} /></div><hr className="lobby-divider" /><form className="lobby-tools" onSubmit={(event) => { event.preventDefault(); void refresh(search); }}><input aria-label="Lobbys durchsuchen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Lobbyname …" /><button className="button-icon" aria-label="Suchen">⌕</button><button type="button" className="button-primary create-button" aria-label="Lobby erstellen" onClick={() => setDialog(true)}>+</button></form>{error && <p className="error">{error}</p>}<section className="surface lobby-browser" aria-busy={!loaded}><div className="list-title"><h3>Offene Lobbys</h3><span className="badge">{loaded ? lobbies.length : "…"}</span></div><div className="lobby-scroll">{!loaded ? <div className="empty-state lobby-loading" role="status"><strong>Lobbys werden gemischt …</strong><span className="muted">Einen Moment bitte.</span></div> : lobbies.length ? lobbies.map((entry, index) => <article className="surface lobby-card" style={{ "--lobby-index": index } as React.CSSProperties} key={entry.code}><div className="lobby-card-info"><strong>{entry.name}</strong><div className="lobby-meta"><span className="lobby-pill">{entry.code}</span><span className="lobby-pill">{entry.players.length}/{entry.settings.maxPlayers} Spieler</span><span className="lobby-pill">Erstellt von {entry.host.username}</span></div></div><button className="join-button" disabled={busy} onClick={() => void join(entry.code)}>Beitreten</button></article>) : <div className="empty-state"><strong>Noch keine Lobby offen.</strong><span className="muted">Erstelle die erste Runde.</span></div>}</div></section></section>{dialog && <LobbySettingsDialog defaultName={`${user.username}'s Lobby`} onClose={() => setDialog(false)} onCreated={onLobby} setError={setError} />}</main>;
 }
 
 function LobbySettingsDialog({ onClose, onCreated, setError, lobby, defaultName }: { onClose: () => void; onCreated?: (code: string) => Promise<void>; setError: (value: string) => void; lobby?: Lobby; defaultName?: string }) {
   const initial = lobby?.settings ?? { maxPlayers: 4, jokersPerPlayer: 1, maxTurnSeconds: 60, streetsRequireSameSuit: true, confirmTurnEnd: true };
   const [name, setName] = useState(lobby?.name ?? defaultName ?? "");
-  const [busy, setBusy] = useState(false); const [settings, setSettings] = useState({ ...initial, maxTurnSeconds: initial.maxTurnSeconds ?? 60 });
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); try { const { confirmTurnEnd: _confirmTurnEnd, ...lobbySettings } = settings; const saved = await api<Lobby>(lobby ? `/lobbies/${lobby.code}/settings` : "/lobbies", { method: "POST", body: JSON.stringify({ ...lobbySettings, name: name.trim() }) }); onClose(); if (!lobby) await onCreated?.(saved.code); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
-  return <div className="dialog-backdrop" role="presentation"><section className="surface dialog"><div className="dialog-title"><h2>{lobby ? "Einstellungen" : "Lobby erstellen"}</h2><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><hr className="dialog-divider" /><form onSubmit={submit} className="settings-form"><label>Lobbyname<input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={40} placeholder="Meine Lobby" required /></label><label>Maximale Spieler<select value={settings.maxPlayers} onChange={(event) => setSettings({ ...settings, maxPlayers: Number(event.target.value) })}>{[2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Joker pro Spieler<select value={settings.jokersPerPlayer} onChange={(event) => setSettings({ ...settings, jokersPerPlayer: Number(event.target.value) })}>{[0,1,2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Zeit pro Zug<select value={settings.maxTurnSeconds} onChange={(event) => setSettings({ ...settings, maxTurnSeconds: Number(event.target.value) })}>{[30,45,60,90,120,180].map((value) => <option key={value} value={value}>{value} Sekunden</option>)}</select></label><label className="toggle"><input type="checkbox" checked={settings.streetsRequireSameSuit} onChange={(event) => setSettings({ ...settings, streetsRequireSameSuit: event.target.checked })} />Straße gleiches Zeicen (♥ ♥ ♥) </label><label className="toggle"><input type="checkbox" checked={settings.confirmTurnEnd} onChange={(event) => setSettings({ ...settings, confirmTurnEnd: event.target.checked })} />Ablegen bestätigen</label><hr className="dialog-divider" /><button className="button-primary" disabled={busy}>{busy ? "Speichere …" : lobby ? "Speichern" : "Lobby erstellen"}</button></form></section></div>;
+  const [phase, setPhase] = useState<"open" | "submitting" | "closing">("open"); const [settings, setSettings] = useState({ ...initial, maxTurnSeconds: initial.maxTurnSeconds ?? 60 });
+  const reduced = usePrefersReducedMotion();
+  const phaseRef = useRef(phase); phaseRef.current = phase;
+  const closeTimer = useRef<number | null>(null);
+  const afterClose = useRef<(() => void) | null>(null);
+  const closeFinished = useRef(false);
+  const finishClose = useCallback(() => {
+    if (closeFinished.current) return;
+    closeFinished.current = true;
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    onClose();
+    afterClose.current?.();
+  }, [onClose]);
+  const close = (after?: () => void) => {
+    if (phaseRef.current === "closing") return;
+    phaseRef.current = "closing";
+    afterClose.current = after ?? null;
+    setPhase("closing");
+    // animationend is authoritative; this is only a safety net for background
+    // tabs and browsers that suppress animations.
+    closeTimer.current = window.setTimeout(finishClose, reduced ? 0 : 420);
+  };
+  useEffect(() => () => { if (closeTimer.current !== null) window.clearTimeout(closeTimer.current); }, []);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (phaseRef.current !== "open") return;
+    phaseRef.current = "submitting"; setPhase("submitting"); setError("");
+    try {
+      const { confirmTurnEnd: _confirmTurnEnd, ...lobbySettings } = settings;
+      const saved = await api<Lobby>(lobby ? `/lobbies/${lobby.code}/settings` : "/lobbies", { method: "POST", body: JSON.stringify({ ...lobbySettings, name: name.trim() }) });
+      close(() => { if (!lobby) onCreated?.(saved.code).catch((reason) => setError(message(reason))); });
+    } catch (reason) {
+      phaseRef.current = "open"; setPhase("open"); setError(message(reason));
+    }
+  };
+  const locked = phase !== "open";
+  return <div className={`dialog-backdrop ${phase === "closing" ? "is-closing" : ""}`} onAnimationEnd={(event) => { if (phaseRef.current === "closing" && event.target === event.currentTarget) finishClose(); }} role="presentation"><section className="surface dialog" role="dialog" aria-modal="true" aria-labelledby="lobby-settings-title"><div className="dialog-title"><h2 id="lobby-settings-title">{lobby ? "Einstellungen" : "Lobby erstellen"}</h2><button className="button-icon" disabled={locked} onClick={() => close()} aria-label="Schließen">×</button></div><hr className="dialog-divider" /><form onSubmit={submit} className="settings-form"><label>Lobbyname<input disabled={locked} value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={40} placeholder="Meine Lobby" required /></label><label>Maximale Spieler<select disabled={locked} value={settings.maxPlayers} onChange={(event) => setSettings({ ...settings, maxPlayers: Number(event.target.value) })}>{[2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Joker pro Spieler<select disabled={locked} value={settings.jokersPerPlayer} onChange={(event) => setSettings({ ...settings, jokersPerPlayer: Number(event.target.value) })}>{[0,1,2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Zeit pro Zug<select disabled={locked} value={settings.maxTurnSeconds} onChange={(event) => setSettings({ ...settings, maxTurnSeconds: Number(event.target.value) })}>{[30,45,60,90,120,180].map((value) => <option key={value} value={value}>{value} Sekunden</option>)}</select></label><label className="toggle"><input disabled={locked} type="checkbox" checked={settings.streetsRequireSameSuit} onChange={(event) => setSettings({ ...settings, streetsRequireSameSuit: event.target.checked })} />Straße gleiches Zeichen (♥ ♥ ♥) </label><label className="toggle"><input disabled={locked} type="checkbox" checked={settings.confirmTurnEnd} onChange={(event) => setSettings({ ...settings, confirmTurnEnd: event.target.checked })} />Ablegen bestätigen</label><hr className="dialog-divider" /><button className="button-primary" disabled={locked}>{phase === "submitting" ? "Speichere …" : lobby ? "Speichern" : "Lobby erstellen"}</button></form></section></div>;
 }
 
 function LobbyView({ user, lobby, connected, error, setError, onLeave, onProfile }: { user: User; lobby: Lobby; connected: boolean; error: string; setError: (value: string) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void }) {
   const [editing, setEditing] = useState(false);
   const self = lobby.players.find((player) => player.user.id === user.id); const isHost = lobby.host.id === user.id;
+  const allReady = lobby.players.length >= 2 && lobby.players.every((player) => player.ready);
   const emptySeats = Array.from({ length: Math.max(0, lobby.settings.maxPlayers - lobby.players.length) });
   const action = async (path: string) => { setError(""); try { await api(`/lobbies/${lobby.code}/${path}`, { method: "POST", body: "{}" }); } catch (reason) { setError(message(reason)); } };
-  return <main className="portrait-view lobby-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Lobby verlassen" onClick={() => void onLeave()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={() => onProfile(user.id)}><Avatar user={user} /></button></header><section className="lobby-layout"><h2 className="lobby-name">{lobby.name}</h2><div className="lobby-settings-row"><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span></section>{isHost && <button className="button-icon lobby-settings-button" aria-label="Lobby-Einstellungen" onClick={() => setEditing(true)}>⚙</button>}</div><section className="surface members-panel"><div className="list-title lobby-player-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className="member-list">{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"} ${player.connected ? "" : "is-offline"}`} key={player.user.id}><Avatar user={player.user} onClick={() => onProfile(player.user.id)} /><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"} · {player.connected ? "Online" : "Offline"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}{emptySeats.map((_, index) => <article className="member-card member-slot-empty" aria-label="Freier Spielerplatz" key={`empty-${index}`}><span className="empty-seat-icon">+</span><strong>Freier Platz</strong><span>Wartet auf Spieler</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer></section>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
+  return <main className="portrait-view lobby-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Lobby verlassen" onClick={() => void onLeave()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={() => onProfile(user.id)}><Avatar user={user} /></button></header><section className="lobby-layout"><h2 className="lobby-name">{lobby.name}</h2><div className="lobby-settings-row"><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span></section>{isHost && <button className="button-icon lobby-settings-button" aria-label="Lobby-Einstellungen" onClick={() => setEditing(true)}>⚙</button>}</div><section className="surface members-panel"><div className="list-title lobby-player-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className={`member-list ${allReady ? "all-ready" : ""}`}>{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"} ${player.connected ? "" : "is-offline"}`} key={player.user.id}><Avatar user={player.user} onClick={() => onProfile(player.user.id)} /><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"} · {player.connected ? "Online" : "Offline"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}{emptySeats.map((_, index) => <article className="member-card member-slot-empty" aria-label="Freier Spielerplatz" key={`empty-${index}`}><span className="empty-seat-icon">+</span><strong>Freier Platz</strong><span>Wartet auf Spieler</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer></section>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
 }
 
 // The client mirrors the server by calling the very same rule functions, so a
@@ -197,37 +308,96 @@ function canLayPhase(cards: Card[], phase: number) {
   try { return validatePhase(phase as Phase, phaseGroups(cards, phase)).valid; } catch { return false; }
 }
 
-type Flight = { key: string; asset: string; from: DOMRect; to: DOMRect; flip: boolean };
+// A card that already exists in the DOM (hand or meld) but is still "in the
+// air": it renders hidden while an overlay flight travels onto its measured
+// position, then pops visible the moment the flight lands (#50).
+type Arrival = { from: Rect; face: string; showBack?: boolean; flip?: { start: number; end: number }; via?: { dx: number; dy: number }; fromTilt?: number; toTilt?: number; duration?: number; delay?: number; onArrive?: () => void };
 
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const listener = () => setReduced(query.matches);
-    query.addEventListener("change", listener);
-    return () => query.removeEventListener("change", listener);
-  }, []);
-  return reduced;
-}
+const DEAL_STEP = GAME_START_TIMING_MS.dealStep;    // ms between two consecutively dealt cards
+const DEAL_FLIGHT = GAME_START_TIMING_MS.dealFlight; // ms a dealt card travels to its owner
 
-function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void; onTutorial: () => void }) {
+function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void; onTutorial: () => void }) {
   const [menu, setMenu] = useState(false); const [scoreboard, setScoreboard] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
   const [selected, setSelected] = useState<string[]>([]); const [busy, setBusy] = useState(false); const [actionError, setActionError] = useState("");
-  const [dismissedRound, setDismissedRound] = useState<number | null>(null); const [dealing, setDealing] = useState(false);
+  const [dismissedRound, setDismissedRound] = useState<number | null>(null);
   const [drag, setDrag] = useState<{ cardId: string; x: number; y: number; zone: string | null } | null>(null);
-  const [flights, setFlights] = useState<Flight[]>([]); const [events, setEvents] = useState<Array<{ key: string; text: string }>>([]);
+  const [events, setEvents] = useState<Array<{ key: string; text: string }>>([]);
   const reduced = usePrefersReducedMotion();
   const anchors = useRef(new Map<string, HTMLElement>());
   const anchor = useCallback((key: string) => (el: HTMLElement | null) => { if (el) anchors.current.set(key, el); else anchors.current.delete(key); }, []);
+  const root = useRef<HTMLElement>(null);
+
+  const initialDealKey = game.state.status === "ACTIVE" && game.state.round === 1 && game.state.ownHand.length >= INITIAL_HAND_SIZE ? `escalera-deal-${lobby.code}-${game.state.round}` : null;
+  const initialTurnOpensAt = game.state.turn.opensAt ? Date.parse(game.state.turn.opensAt) : Number.NaN;
+  // The authoritative start barrier is also the idempotency boundary: a new
+  // tab after turns have opened (or a legacy snapshot without opensAt) must
+  // render server truth immediately instead of replaying the opening deal.
+  const prepareDealOnMount = useRef(Boolean(initialDealKey && Number.isFinite(initialTurnOpensAt) && initialTurnOpensAt > Date.now() && !reduced && !hasSessionFlag(initialDealKey)));
+  const dealKey = prepareDealOnMount.current ? initialDealKey : null;
+  const initialDealCount = game.state.players.length * INITIAL_HAND_SIZE;
+
+  // Animation state (#50). Flights are travelling overlay cards; arrivals mark
+  // real cards that stay hidden until their flight lands on them. The *Hold
+  // values freeze displayed counts/piles at their pre-action value so numbers
+  // and pile tops change exactly when a card arrives, not when the server
+  // state does.
+  const [flights, setFlights] = useState<FlightSpec[]>([]);
+  const [arrivals, setArrivals] = useState<Record<string, Arrival>>({});
+  const [dealStage, setDealStage] = useState<"drop" | "shuffle" | null>(null);
+  const [dealRect, setDealRect] = useState<Rect | null>(null);
+  const [dealing, setDealing] = useState(prepareDealOnMount.current);
+  const [dealtIds, setDealtIds] = useState<Set<string> | null>(() => prepareDealOnMount.current ? new Set() : null);
+  const [countHold, setCountHold] = useState<Record<string, number>>(() => prepareDealOnMount.current ? Object.fromEntries(game.state.players.filter((player) => player.userId !== user.id).map((player) => [player.userId, 0])) : {});
+  const [discardHold, setDiscardHold] = useState<{ top: Card | null; count: number } | null>(() => prepareDealOnMount.current ? { top: null, count: 0 } : null);
+  const [drawHold, setDrawHold] = useState<number | null>(() => prepareDealOnMount.current ? game.state.drawPileCount + initialDealCount + 1 : null);
+  const gameRef = useRef(game); gameRef.current = game;
+
+  const rectOf = useCallback((key: string): Rect | null => { const element = anchors.current.get(key); if (!element) return null; const box = element.getBoundingClientRect(); return { left: box.left, top: box.top, width: box.width, height: box.height }; }, []);
+  const seatTarget = useCallback((userId: string): Rect | null => { const box = rectOf(`seat:${userId}`); return box ? fitCardRect(box, .8) : null; }, [rectOf]);
+  const seatRects = useRef(new Map<string, Rect>());
+  const previousSeatRects = useRef(new Map<string, Rect>());
+  useLayoutEffect(() => {
+    previousSeatRects.current = seatRects.current;
+    const next = new Map<string, Rect>();
+    for (const player of game.state.players) {
+      const box = rectOf(`seat:${player.userId}`);
+      if (box) next.set(player.userId, fitCardRect(box, .8));
+    }
+    seatRects.current = next;
+  });
+  const pushFlight = (flight: FlightSpec) => setFlights((current) => [...current, flight]);
+  const addArrival = (cardId: string, arrival: Arrival) => setArrivals((current) => ({ ...current, [cardId]: arrival }));
+  const holdCount = (userId: string, value: number | undefined) => { if (value !== undefined) setCountHold((current) => ({ ...current, [userId]: value })); };
+  const releaseCount = (userId: string) => setCountHold((current) => { const { [userId]: _released, ...rest } = current; return rest; });
 
   const players = useMemo(() => game.state.players.map((player) => { const member = lobby.players.find((entry) => entry.user.id === player.userId); return { ...player, user: member?.user ?? { id: player.userId, username: "Spieler", avatarKey: null, tutorialCompleted: false }, connected: member?.connected ?? false }; }), [game.state.players, lobby.players]);
   const activePlayer = players.find((player) => player.userId === game.state.activePlayerId) ?? players[0];
   const turnOrder = players.filter((player) => player.userId !== game.state.activePlayerId);
   const hand = useMemo(() => [...game.state.ownHand].sort((a, b) => cardSort(a, b, sort)), [game.state.ownHand, sort]);
+  const shownHand = dealtIds ? hand.filter((card) => dealtIds.has(card.id)) : hand;
+  const shownCards = (player: { userId: string; handCount: number }) => countHold[player.userId] ?? player.handCount;
+  const shownDraw = drawHold ?? game.state.drawPileCount;
+  const shownDiscard = discardHold ?? { top: game.state.discardTop, count: game.state.discardPileCount };
   const self = game.state.players.find((player) => player.userId === user.id)!;
   const sameSuit = lobby.settings.streetsRequireSameSuit;
-  const canDraw = game.state.turn.canAct && !game.state.turn.hasDrawn && !busy;
-  const canPlay = game.state.turn.canAct && game.state.turn.hasDrawn && !busy;
+  const [turnBarrierTick, setTurnBarrierTick] = useState(0);
+  useEffect(() => {
+    const opensAt = game.state.turn.opensAt ? Date.parse(game.state.turn.opensAt) : Number.NaN;
+    if (!Number.isFinite(opensAt)) return;
+    const wait = opensAt - Date.now();
+    if (wait <= 0) { setTurnBarrierTick((current) => current + 1); return; }
+    const timer = window.setTimeout(() => setTurnBarrierTick((current) => current + 1), wait + 20);
+    return () => window.clearTimeout(timer);
+  }, [game.state.turn.opensAt]);
+  const opensAt = game.state.turn.opensAt ? Date.parse(game.state.turn.opensAt) : Number.NaN;
+  const turnOpened = !Number.isFinite(opensAt) || opensAt <= Date.now() || turnBarrierTick > 0;
+  const mayAct = game.state.turn.canAct || (turnOpened && game.state.activePlayerId === user.id && !game.state.roundEndedById);
+  // A server update is visually committed before another command may start.
+  // This keeps a fast next player (or the buy action) from stacking a second
+  // transition on top of cards and held counters that are still in flight.
+  const visualBusy = introHold || dealing || flights.length > 0 || Object.keys(arrivals).length > 0;
+  const canDraw = mayAct && !game.state.turn.hasDrawn && !busy && !visualBusy;
+  const canPlay = mayAct && game.state.turn.hasDrawn && !busy && !visualBusy;
   const selectedCards = useMemo(() => hand.filter((card) => selected.includes(card.id)), [hand, selected]);
   const canDiscard = canPlay && selected.length === 1;
   // Only offer the meld zone when the selection would actually pass validation.
@@ -236,38 +406,277 @@ function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, on
   const targets = useMemo(() => new Set<string>([...(canDraw ? ["draw", ...(game.state.discardTop ? ["discard"] : [])] : []), ...(canDiscard ? ["discard"] : []), ...(canLay ? ["meldzone"] : []), ...openMelds.map((id) => `meld:${id}`)]), [canDraw, canDiscard, canLay, openMelds, game.state.discardTop]);
 
   useEffect(() => setSelected((current) => current.filter((id) => game.state.ownHand.some((card) => card.id === id))), [game.state.ownHand]);
-  useEffect(() => { const key = `escalera-deal-${lobby.code}-${game.state.round}`; if (game.state.round === 1 && game.state.ownHand.length >= 11 && !sessionStorage.getItem(key)) { sessionStorage.setItem(key, "1"); setDealing(true); const timer = window.setTimeout(() => setDealing(false), reduced ? 0 : dealDurationMs(game.state.players.length)); return () => window.clearTimeout(timer); } }, [game.state.ownHand.length, game.state.round, lobby.code, reduced]);
 
-  // Animations are keyed by commandId, so a replayed realtime event or a
-  // reconnect re-render never animates the same action twice. The first state
-  // seen only seeds the set: joining a game in progress must not replay history.
-  const seen = useRef(new Set<string>()); const primed = useRef(false);
+  // Hand bookkeeping: remember every hand card's on-screen rect (outbound
+  // flights start from the spot a card last occupied) and FLIP-shift the
+  // remaining cards whenever the hand's composition changes, so inserts and
+  // removals glide instead of snapping. The `translate` property composes
+  // before the fan transform, so the glide happens in screen space.
+  const handRects = useRef(new Map<string, Rect>());
+  const handIds = shownHand.map((card) => card.id).join("|");
+  const prevHandIds = useRef(handIds);
+  useLayoutEffect(() => {
+    const container = root.current; if (!container) return;
+    const shifted = prevHandIds.current !== handIds; prevHandIds.current = handIds;
+    const next = new Map(handRects.current);
+    container.querySelectorAll<HTMLElement>(".hand-cards [data-fx-card]").forEach((element) => {
+      const id = element.dataset.fxCard ?? ""; const box = element.getBoundingClientRect();
+      const rect = { left: box.left, top: box.top, width: box.width, height: box.height };
+      const previous = handRects.current.get(id);
+      if (shifted && previous && !arrivals[id] && !reduced) {
+        const dx = previous.left - rect.left; const dy = previous.top - rect.top;
+        if (Math.abs(dx) + Math.abs(dy) > 3) element.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0px 0px" }], { duration: 240, easing: "cubic-bezier(.3,.7,.3,1)" });
+      }
+      next.set(id, rect);
+    });
+    handRects.current = next;
+  });
+
+  // Arrival spawner: a card that just appeared in the DOM is measured at its
+  // final spot, kept hidden via .is-incoming, and an overlay flight travels
+  // onto it. If the layout shifted while it was airborne, it glides the last
+  // few pixels after landing.
+  const spawned = useRef(new Set<string>());
+  const cancelVisuals = useCallback(() => {
+    // Keep the overlay, hidden destination cards and all held counters/piles
+    // in one cancellation batch. Clearing spawned is essential: a later
+    // arrival of the same card id must be allowed to create a fresh flight.
+    spawned.current.clear();
+    setFlights([]);
+    setArrivals({});
+    setCountHold({});
+    setDiscardHold(null);
+    setDrawHold(null);
+  }, []);
+  useLayoutEffect(() => {
+    const container = root.current; if (!container) return;
+    const pending = Object.entries(arrivals).filter(([id]) => !spawned.current.has(id));
+    if (!pending.length) return;
+    const additions: FlightSpec[] = [];
+    for (const [id, arrival] of pending) {
+      spawned.current.add(id);
+      const element = container.querySelector<HTMLElement>(`[data-fx-card="${CSS.escape(id)}"]`);
+      const clear = () => { spawned.current.delete(id); setArrivals((current) => { const { [id]: _done, ...rest } = current; return rest; }); arrival.onArrive?.(); };
+      if (!element) { clear(); continue; }
+      const box = element.getBoundingClientRect();
+      const to = { left: box.left, top: box.top, width: box.width, height: box.height };
+      additions.push({
+        key: `arrival-${id}`, from: arrival.from, to, face: arrival.face, showBack: arrival.showBack, flip: arrival.flip, via: arrival.via, fromTilt: arrival.fromTilt, toTilt: arrival.toTilt, duration: arrival.duration, delay: arrival.delay,
+        onArrive: () => {
+          if (element.isConnected) {
+            const now = element.getBoundingClientRect(); const dx = to.left - now.left; const dy = to.top - now.top;
+            if (Math.abs(dx) + Math.abs(dy) > 3) element.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0px 0px" }], { duration: 200, easing: "ease-out" });
+          }
+          clear();
+        }
+      });
+    }
+    if (additions.length) setFlights((current) => [...current, ...additions]);
+  });
+
+  // Deal choreography (#50): the deck drops in from the top, riffle-shuffles,
+  // then 11 cards per player travel out round-robin — opponents' cards to
+  // their seat (ticking the counter 1…11), own cards sorted straight into the
+  // hand. Finally the first discard flips onto the empty discard slot. The
+  // sessionStorage flag keeps a reconnect within the same session from
+  // replaying it; an interrupted run clears the flag so nothing sticks.
+  const introHoldRef = useRef(introHold); introHoldRef.current = introHold;
+  const timers = useRef<number[]>([]);
+  const dealSettled = useRef(false);
+  const fastForwardDeal = useCallback(() => {
+    dealSettled.current = true;
+    timers.current.forEach((timer) => window.clearTimeout(timer));
+    timers.current = [];
+    setDealing(false);
+    setDealStage(null);
+    setDealRect(null);
+    setDealtIds(null);
+    cancelVisuals();
+  }, [cancelVisuals]);
   useEffect(() => {
+    if (!dealKey || reduced) return;
+    if (hasSessionFlag(dealKey)) return;
+    try { sessionStorage.setItem(dealKey, "1"); } catch { /* private mode: run once for this mount */ }
+    const schedule = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, ms));
+    const snapshot = gameRef.current;
+    const initialDiscard = snapshot.state.discardTop;
+    dealSettled.current = false;
+    const order = snapshot.state.players.map((player) => player.userId);
+    const ownOrder = snapshot.state.ownHand;
+    const total = order.length * INITIAL_HAND_SIZE;
+    setDealing(true);
+    setDealtIds(new Set());
+    setCountHold(Object.fromEntries(order.filter((id) => id !== user.id).map((id) => [id, 0])));
+    setDiscardHold({ top: null, count: 0 });
+    setDrawHold(snapshot.state.drawPileCount + total + 1);
+    const start = introHoldRef.current ? Math.max(0, MATCH_INTRO_MS - 600) : 250;
+    schedule(start, () => { setDealRect(rectOf("draw")); setDealStage("drop"); });
+    schedule(start + DEAL_TIMING.drop, () => setDealStage("shuffle"));
+    const dealFrom = start + DEAL_TIMING.drop + DEAL_TIMING.shuffle;
+    for (let index = 0; index < total; index += 1) {
+      const playerId = order[index % order.length];
+      const cardIndex = Math.floor(index / order.length);
+      schedule(dealFrom + index * DEAL_STEP, () => {
+        if (index === 0) setDealStage(null);
+        const from = rectOf("draw"); if (!from) return;
+        setDrawHold((current) => (current === null ? null : current - 1));
+        if (playerId === user.id) {
+          const card = ownOrder[cardIndex]; if (!card) return;
+          setDealtIds((current) => { const next = new Set(current ?? []); next.add(card.id); return next; });
+          addArrival(card.id, { from, face: cardAsset(card), showBack: true, flip: { start: .25, end: .7 }, fromTilt: BOARD_TILT, duration: DEAL_FLIGHT });
+        } else {
+          const to = seatTarget(playerId); if (!to) return;
+          pushFlight({ key: `deal-${index}`, from, to, face: CARD_BACK, showBack: true, fromTilt: BOARD_TILT, duration: DEAL_FLIGHT, onArrive: () => setCountHold((current) => ({ ...current, [playerId]: (current[playerId] ?? 0) + 1 })) });
+        }
+      });
+    }
+    const dealEnd = dealFrom + total * DEAL_STEP + DEAL_FLIGHT;
+    schedule(dealEnd + 150, () => {
+      const from = rectOf("draw"); const to = rectOf("discard"); const top = initialDiscard;
+      setDrawHold(null);
+      if (from && to && top) pushFlight({ key: "deal-first-discard", from, to, face: cardAsset(top), showBack: true, flip: { start: .3, end: .8 }, fromTilt: BOARD_TILT, toTilt: BOARD_TILT, duration: 560, onArrive: () => setDiscardHold(null) });
+      else setDiscardHold(null);
+    });
+    schedule(dealEnd + 900, () => { dealSettled.current = true; setDealing(false); setDealtIds(null); setCountHold({}); });
+    return () => {
+      timers.current.forEach((timer) => window.clearTimeout(timer)); timers.current = [];
+      if (!dealSettled.current) { try { sessionStorage.removeItem(dealKey); } catch { /* no storage access */ } setDealing(false); setDealStage(null); setDealtIds(null); setCountHold({}); setDiscardHold(null); setDrawHold(null); }
+    };
+  }, [dealKey, reduced]);
+
+  // Action-driven animations, keyed by commandId, so a replayed realtime event
+  // or a reconnect re-render never animates the same action twice. The first
+  // state seen only seeds the set: joining a game in progress must not replay
+  // history. Flight plans diff the previous state snapshot against the new one.
+  const seen = useRef(new Set<string>()); const primed = useRef(false);
+  const prevGame = useRef(game);
+  useLayoutEffect(() => {
+    const previous = prevGame.current; prevGame.current = game;
     const fresh = game.state.recentActions.filter((action) => !seen.current.has(action.commandId));
     for (const action of game.state.recentActions) seen.current.add(action.commandId);
     if (!primed.current) { primed.current = true; return; }
     if (!fresh.length) return;
     setEvents((current) => [...current, ...fresh.map((action) => ({ key: action.commandId, text: actionText(action, lobby, user.id) }))].slice(-3));
-    if (dealing) return;
-    const rect = (key: string) => anchors.current.get(key)?.getBoundingClientRect();
-    const next: Flight[] = [];
-    for (const action of fresh) {
-      const seat = action.userId === user.id ? "hand" : `seat:${action.userId}`;
-      const plan = action.type === "draw" ? { from: "draw", to: seat, asset: CARD_BACK, flip: false }
-        : action.type === "buy" ? { from: "discard", to: seat, asset: CARD_BACK, flip: false }
-        : action.type === "discard" ? { from: seat, to: "discard", asset: game.state.discardTop ? cardAsset(game.state.discardTop) : CARD_BACK, flip: true }
-        : action.type === "add-to-meld" ? { from: seat, to: "meldzone", asset: CARD_BACK, flip: false }
-        : action.type === "phase" || action.type === "meld" ? { from: seat, to: "meldzone", asset: CARD_BACK, flip: false }
-        : null;
-      if (!plan) continue;
-      const from = rect(plan.from); const to = rect(plan.to);
-      if (from && to) next.push({ key: action.commandId, asset: plan.asset, from, to, flip: plan.flip });
+    // Only adjacent versions have an unambiguous before/after snapshot. On a
+    // reconnect or missed packet we deliberately fast-forward to the server
+    // truth instead of inventing a flight from an aggregate diff. A round
+    // rollover also replaces every pile/hand in one mutation and is therefore
+    // never treated as the final discard of the old round.
+    const plannedAction = fresh.length === 1 ? fresh[0] : null;
+    if (!plannedAction || game.version !== previous.version + 1 || plannedAction.version !== game.version || previous.state.round !== game.state.round) {
+      if (dealing) fastForwardDeal();
+      else cancelVisuals();
+      return;
     }
-    if (next.length) setFlights((current) => [...current, ...next]);
+    // A fresh authoritative action wins over every older choreography. During
+    // the opening deal this reveals the complete snapshot first, then plans the
+    // action normally; it must never be marked seen and silently discarded.
+    if (dealing) fastForwardDeal();
+    else cancelVisuals();
+    let meldsPlanned = false;
+    for (const action of [plannedAction]) {
+      const mine = action.userId === user.id;
+      if (action.type === "timeout" || action.type === "disconnect-skip") {
+        // Automatic turn completion is one authoritative mutation but two
+        // visible beats: an optional draw followed by the forced discard.
+        const includesDraw = action.metadata?.includesDraw ?? !previous.state.turn.hasDrawn;
+        const includesDiscard = action.metadata?.includesDiscard ?? true;
+        const previousCount = previous.state.players.find((player) => player.userId === action.userId)?.handCount ?? 0;
+        const drawFrom = rectOf("draw");
+        const discardTo = rectOf("discard");
+        const discarded = game.state.discardTop;
+        const oldDiscard = { top: previous.state.discardTop, count: previous.state.discardPileCount };
+        const discardDelay = includesDraw ? 760 : 0;
+        holdCount(action.userId, previousCount);
+        if (includesDiscard) setDiscardHold(oldDiscard);
+
+        if (mine) {
+          const added = game.state.ownHand.find((entry) => !previous.state.ownHand.some((card) => card.id === entry.id));
+          const removed = previous.state.ownHand.find((entry) => !game.state.ownHand.some((card) => card.id === entry.id));
+          const handBox = rectOf("hand");
+          const handTarget = handBox ? fitCardRect(handBox, .9) : null;
+          if (includesDraw && drawFrom) {
+            const onDrawn = () => setCountHold((current) => ({ ...current, [action.userId]: previousCount + 1 }));
+            if (added) addArrival(added.id, { from: drawFrom, face: cardAsset(added), showBack: true, flip: { start: .18, end: .6 }, via: { dx: drawFrom.width * 1.15, dy: -drawFrom.height * .08 }, fromTilt: BOARD_TILT, duration: 700, onArrive: onDrawn });
+            else if (handTarget && discarded) pushFlight({ key: `${action.commandId}-auto-draw`, from: drawFrom, to: handTarget, face: cardAsset(discarded), showBack: true, flip: { start: .2, end: .62 }, fromTilt: BOARD_TILT, duration: 700, onArrive: onDrawn });
+          }
+          if (includesDiscard && discardTo && discarded) {
+            const from = (removed && handRects.current.get(removed.id)) ?? handTarget;
+            if (from) pushFlight({ key: `${action.commandId}-auto-discard`, from, to: discardTo, face: cardAsset(discarded), toTilt: BOARD_TILT, duration: 520, delay: discardDelay, onArrive: () => { setDiscardHold(null); releaseCount(action.userId); } });
+            else { setDiscardHold(null); releaseCount(action.userId); }
+          } else if (!includesDiscard) releaseCount(action.userId);
+        } else {
+          const seat = previousSeatRects.current.get(action.userId) ?? seatTarget(action.userId);
+          if (includesDraw && drawFrom && seat) pushFlight({ key: `${action.commandId}-auto-draw`, from: drawFrom, to: seat, face: CARD_BACK, showBack: true, fromTilt: BOARD_TILT, duration: 540, onArrive: () => setCountHold((current) => ({ ...current, [action.userId]: previousCount + 1 })) });
+          if (includesDiscard && seat && discardTo && discarded) pushFlight({ key: `${action.commandId}-auto-discard`, from: seat, to: discardTo, face: cardAsset(discarded), showBack: true, flip: { start: .55, end: .94 }, toTilt: BOARD_TILT, duration: 620, delay: discardDelay, onArrive: () => { setDiscardHold(null); releaseCount(action.userId); } });
+          else if (includesDiscard) { setDiscardHold(null); releaseCount(action.userId); }
+          else releaseCount(action.userId);
+        }
+      } else if (action.type === "draw" || action.type === "buy") {
+        const source = action.type === "buy" ? "discard" : action.metadata?.source ?? (game.state.discardPileCount < previous.state.discardPileCount ? "discard" : "draw");
+        const from = rectOf(source); if (!from) continue;
+        const fromDiscard = source === "discard";
+        if (fromDiscard) setDiscardHold({ top: previous.state.discardTop, count: previous.state.discardPileCount });
+        if (mine) {
+          const card = game.state.ownHand.find((entry) => !previous.state.ownHand.some((own) => own.id === entry.id));
+          if (!card) { if (fromDiscard) setDiscardHold(null); continue; }
+          // Own draw: off the pile, a nudge to the right, flip face-up, then
+          // glide into the sorted slot. A bought card is already face-up.
+          if (source === "draw") addArrival(card.id, { from, face: cardAsset(card), showBack: true, flip: { start: .18, end: .58 }, via: { dx: from.width * 1.2, dy: -from.height * .08 }, fromTilt: BOARD_TILT, duration: 700 });
+          else addArrival(card.id, { from, face: cardAsset(card), fromTilt: BOARD_TILT, duration: 620, onArrive: () => setDiscardHold(null) });
+        } else {
+          const to = seatTarget(action.userId); if (!to) { if (fromDiscard) setDiscardHold(null); continue; }
+          holdCount(action.userId, previous.state.players.find((player) => player.userId === action.userId)?.handCount);
+          pushFlight({ key: `${action.commandId}-fly`, from, to, face: fromDiscard && previous.state.discardTop ? cardAsset(previous.state.discardTop) : CARD_BACK, showBack: !fromDiscard, fromTilt: BOARD_TILT, duration: 540, onArrive: () => { if (fromDiscard) setDiscardHold(null); releaseCount(action.userId); } });
+        }
+      } else if (action.type === "discard") {
+        const to = rectOf("discard"); const card = game.state.discardTop;
+        if (!to || !card) continue;
+        const hold = { top: previous.state.discardTop, count: previous.state.discardPileCount };
+        if (mine) {
+          const removed = previous.state.ownHand.find((entry) => !game.state.ownHand.some((own) => own.id === entry.id));
+          const from = (removed && handRects.current.get(removed.id)) ?? rectOf("hand");
+          if (!from) continue;
+          setDiscardHold(hold);
+          pushFlight({ key: `${action.commandId}-fly`, from, to, face: cardAsset(card), toTilt: BOARD_TILT, duration: 500, onArrive: () => setDiscardHold(null) });
+        } else {
+          const from = previousSeatRects.current.get(action.userId) ?? seatTarget(action.userId); if (!from) continue;
+          setDiscardHold(hold);
+          holdCount(action.userId, previous.state.players.find((player) => player.userId === action.userId)?.handCount);
+          pushFlight({ key: `${action.commandId}-fly`, from, to, face: cardAsset(card), showBack: true, flip: { start: .55, end: .95 }, toTilt: BOARD_TILT, duration: 620, onArrive: () => { setDiscardHold(null); releaseCount(action.userId); } });
+        }
+      } else if (action.type === "phase" || action.type === "meld" || action.type === "add-to-meld") {
+        // All meld growth between the two states animates once, attributed to
+        // the acting player: own cards fly face-up from their hand slots,
+        // opponents' cards travel face-down from their seat and flip on the
+        // pile they now belong to.
+        if (meldsPlanned) continue; meldsPlanned = true;
+        const grown: Card[] = [];
+        for (const meld of game.state.melds) {
+          const before = previous.state.melds.find((entry) => entry.id === meld.id);
+          grown.push(...meld.cards.filter((entry) => !before || !before.cards.some((card) => card.id === entry.id)));
+        }
+        if (!grown.length) continue;
+        const previousCount = previous.state.players.find((player) => player.userId === action.userId)?.handCount;
+        if (!mine) holdCount(action.userId, previousCount);
+        const lastId = grown[grown.length - 1].id;
+        grown.forEach((card, offset) => {
+          const from = mine ? ((handRects.current.get(card.id) ?? rectOf("hand"))) : seatTarget(action.userId);
+          if (!from) return;
+          addArrival(card.id, mine
+            ? { from, face: cardAsset(card), toTilt: BOARD_TILT, duration: 520, delay: offset * 70 }
+            : { from, face: cardAsset(card), showBack: true, flip: { start: .5, end: .92 }, toTilt: BOARD_TILT, duration: 620, delay: offset * 80, onArrive: () => {
+                if (card.id === lastId) releaseCount(action.userId);
+                else setCountHold((current) => ({ ...current, [action.userId]: Math.max(0, (current[action.userId] ?? previousCount ?? 0) - 1) }));
+              } });
+        });
+      }
+    }
   }, [game.version]);
   useEffect(() => { if (!events.length) return; const timer = window.setTimeout(() => setEvents((current) => current.slice(1)), 2600); return () => window.clearTimeout(timer); }, [events]);
 
   const act = async (path: string, body?: object) => {
+    if (visualBusy) return;
     setBusy(true); setActionError("");
     try { const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) }); onGame(result); setSelected([]); }
     catch (reason) { if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game); setActionError(message(reason)); }
@@ -312,65 +721,43 @@ function GameView({ user, lobby, game, connected, onGame, onLeave, onProfile, on
   // dragging reads as refused, which is the feedback without sending an action.
   const zoneClass = (zone: string) => targets.has(zone) ? "is-target" : drag?.zone === zone ? "is-refused" : "";
 
-  const hint = !game.state.turn.canAct ? `${activePlayer?.user.username ?? "Spieler"} ist am Zug` : !game.state.turn.hasDrawn ? "Ziehe vom Stapel oder von der Ablage" : canLay ? "Auswahl in die Meld-Zone legen" : openMelds.length ? "An eine passende Auslage anlegen" : selected.length === 1 ? "Karte ablegen oder anlegen" : "Wähle Karten oder lege eine Karte ab";
+  const hint = dealing || !turnOpened ? "Mischen und Geben …" : !mayAct ? `${activePlayer?.user.username ?? "Spieler"} ist am Zug` : !game.state.turn.hasDrawn ? "Ziehe vom Stapel oder von der Ablage" : canLay ? "Auswahl in die Meld-Zone legen" : openMelds.length ? "An eine passende Auslage anlegen" : selected.length === 1 ? "Karte ablegen oder anlegen" : "Wähle Karten oder lege eine Karte ab";
   const showRoundResult = game.state.status === "ACTIVE" && game.state.lastRoundResult && dismissedRound !== game.state.lastRoundResult.round;
-  return <main className={`landscape-view game-view ${drag ? "is-dragging" : ""}`} data-version={game.version}>
+  return <main ref={root} className={`landscape-view game-view ${drag ? "is-dragging" : ""} ${dealStage ? "is-staging" : ""}`} data-version={game.version} {...(introHold ? { inert: true } : {})}>
     <Orientation landscape />
     <header className="game-hud">
-      <section className="turn-order" aria-label="Zugreihenfolge"><span className="hud-kicker">Reihenfolge</span>{turnOrder.map((player, index) => <article className={`turn-order-player ${player.connected ? "" : "is-offline"}`} ref={anchor(`seat:${player.userId}`)} key={player.userId}><span className="turn-position">{index + 1}</span><Avatar user={player.user} onClick={() => onProfile(player.userId)} /><div><strong>{player.user.username}</strong><span>{player.coins} Münzen · {player.handCount} Karten</span></div></article>)}</section>
-      <section className={`active-player-hud ${activePlayer?.userId === user.id ? "is-self" : ""}`} ref={anchor(`seat:${activePlayer?.userId}`)}><Avatar user={activePlayer.user} onClick={() => onProfile(activePlayer.userId)} /><div><span className="hud-kicker">{activePlayer.userId === user.id ? "Du bist am Zug" : "Am Zug"}</span><strong>{activePlayer.user.username}</strong><span>{activePlayer.coins} Münzen · {activePlayer.totalPenalty} Punkte · {activePlayer.handCount} Karten</span></div><TurnCountdown deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /></section>
+      <section className="turn-order" aria-label="Zugreihenfolge"><span className="hud-kicker">Reihenfolge</span>{turnOrder.map((player, index) => <article className={`turn-order-player ${player.connected ? "" : "is-offline"}`} ref={anchor(`seat:${player.userId}`)} key={player.userId}><span className="turn-position">{index + 1}</span><Avatar user={player.user} onClick={() => onProfile(player.userId)} /><div><strong>{player.user.username}</strong><span>{player.coins} Münzen · {shownCards(player)} Karten</span></div></article>)}</section>
+      <section className={`active-player-hud ${activePlayer?.userId === user.id ? "is-self" : ""}`} ref={anchor(`seat:${activePlayer?.userId}`)}><Avatar user={activePlayer.user} onClick={() => onProfile(activePlayer.userId)} /><div><span className="hud-kicker">{activePlayer.userId === user.id ? "Du bist am Zug" : "Am Zug"}</span><strong>{activePlayer.user.username}</strong><span>{activePlayer.coins} Münzen · {activePlayer.totalPenalty} Punkte · {shownCards(activePlayer)} Karten</span></div><TurnCountdown opensAt={game.state.turn.opensAt} deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /></section>
       <section className="phase-hud"><span className="hud-kicker">Runde {game.state.round}</span><strong>Phase {game.state.phase} / 7</strong><span>{self.phaseLaid ? "Phase ausgelegt" : "Phase offen"}</span></section>
     </header>
     <p className="turn-hint" aria-live="polite">{hint}</p>
     <section className="game-board">
       <div className="pile-station">
-        <div className={`pile-slot ${zoneClass("draw")}`}><button ref={anchor("draw")} className="game-pile draw-pile" data-zone="draw" style={{ "--pile-depth": game.state.drawPileCount } as React.CSSProperties} aria-label={`Vom Stapel ziehen, ${game.state.drawPileCount} Karten verbleiben`} disabled={!canDraw} onClick={() => runZone("draw")}><img src={CARD_BACK} alt="" /></button></div>
-        <span>Ziehstapel <b>[ {game.state.drawPileCount} ]</b></span>
+        <div className={`pile-slot ${zoneClass("draw")}`}><button ref={anchor("draw")} className="game-pile draw-pile" data-zone="draw" aria-label={`Vom Stapel ziehen, ${shownDraw} Karten verbleiben`} disabled={!canDraw} onClick={() => runZone("draw")}><PileStack count={shownDraw} top={null} kind="draw" /></button></div>
+        <span>Ziehstapel <b>[ {shownDraw} ]</b></span>
       </div>
       <div className={`meld-zone ${zoneClass("meldzone")}`} ref={anchor("meldzone")} data-zone="meldzone" onClick={() => canLay && runZone("meldzone")}>
-        {game.state.melds.length ? game.state.melds.map((meld) => <article className={`meld-card ${openMelds.includes(meld.id) ? "is-target" : ""}`} data-zone={`meld:${meld.id}`} ref={anchor(`meld:${meld.id}`)} onClick={(event) => { event.stopPropagation(); runZone(`meld:${meld.id}`); }} key={meld.id} aria-label={`${meld.type === "group" ? "Gruppe" : "Straße"}: ${meld.cards.map(cardLabel).join(", ")}`}><div className="meld-cards" style={{ "--meld-count": meld.cards.length } as React.CSSProperties}>{meld.cards.map((card) => <CardFace card={card} key={card.id} />)}</div></article>) : <div className="empty-meld"><span className="empty-meld-icon">◇</span><strong>Meld-Zone</strong><span>Gruppen und Straßen erscheinen hier</span></div>}
+        {game.state.melds.length ? game.state.melds.map((meld) => <article className={`meld-card ${openMelds.includes(meld.id) ? "is-target" : ""}`} data-zone={`meld:${meld.id}`} ref={anchor(`meld:${meld.id}`)} onClick={(event) => { event.stopPropagation(); runZone(`meld:${meld.id}`); }} key={meld.id} aria-label={`${meld.type === "group" ? "Gruppe" : "Straße"}: ${meld.cards.map(cardLabel).join(", ")}`}><div className="meld-cards" style={{ "--meld-count": meld.cards.length } as React.CSSProperties}>{meld.cards.map((card) => <CardFace card={card} fxId={card.id} incoming={!!arrivals[card.id]} key={card.id} />)}</div></article>) : <div className="empty-meld"><span className="empty-meld-icon">◇</span><strong>Meld-Zone</strong><span>Gruppen und Straßen erscheinen hier</span></div>}
       </div>
       <div className="pile-station">
-        <div className={`pile-slot ${zoneClass("discard")}`}><button ref={anchor("discard")} className="game-pile discard-pile" data-zone="discard" style={{ "--pile-depth": game.state.discardPileCount } as React.CSSProperties} aria-label={canDiscard ? "Ausgewählte Karte ablegen" : game.state.discardTop ? `${cardLabel(game.state.discardTop)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}>{game.state.discardTop ? <CardFace card={game.state.discardTop} /> : <strong className="pile-empty">Leer</strong>}</button></div>
-        <span>Ablage <b>[ {game.state.discardPileCount} ]</b></span>
-        {game.state.discardOffer && <button className="buy-button" disabled={busy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}
+        <div className={`pile-slot ${zoneClass("discard")}`}><button ref={anchor("discard")} className="game-pile discard-pile" data-zone="discard" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : shownDiscard.top ? `${cardLabel(shownDiscard.top)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}><PileStack count={shownDiscard.count} top={shownDiscard.top} kind="discard" /></button></div>
+        <span>Ablage <b>[ {shownDiscard.count} ]</b></span>
+        {game.state.discardOffer && <button className="buy-button" disabled={busy || visualBusy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}
       </div>
     </section>
-    <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{hand.map((card, index) => <button type="button" onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""}`} style={{ "--card-count": hand.length, "--card-index": index } as React.CSSProperties} key={card.id}><span className="card-3d"><CardFace card={card} /></span></button>)}</div></section>
-    <nav className="game-nav" aria-label="Spielnavigation"><button className="game-nav-button" aria-label="Spielmenü öffnen" onClick={() => setMenu(true)}>☰ <span>Menü</span></button></nav>
+    <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{shownHand.map((card, index) => <button type="button" data-fx-card={card.id} onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""} ${arrivals[card.id] ? "is-incoming" : ""}`} style={{ "--card-count": shownHand.length, "--card-index": index } as React.CSSProperties} key={card.id}><span className="card-3d"><CardFace card={card} /></span></button>)}</div></section>
+    <nav className="game-nav" aria-label="Spielnavigation"><button className="game-nav-button" disabled={introHold} aria-label="Spielmenü öffnen" onClick={() => setMenu(true)}>☰ <span>Menü</span></button></nav>
     <GameStatusBar connected={connected} />
     <div className="game-events" aria-live="polite">{events.map((event) => <span className="game-event" key={event.key}>{event.text}</span>)}</div>
     {actionError && <div className="game-error" role="alert">{actionError}</div>}
     {drag && <div className="drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">{(() => { const card = hand.find((entry) => entry.id === drag.cardId); return card ? <CardFace card={card} /> : null; })()}</div>}
-    <div className="flight-layer" aria-hidden="true">{flights.map((flight) => <CardFlight flight={flight} reduced={reduced} onDone={() => setFlights((current) => current.filter((entry) => entry.key !== flight.key))} key={flight.key} />)}</div>
-    {dealing && <DealAnimation players={players} selfId={user.id} />}
+    <FlightLayer flights={flights} reduced={reduced} onDone={(key) => setFlights((current) => current.filter((entry) => entry.key !== key))} />
+    {dealStage && dealRect && <DealStage rect={dealRect} stage={dealStage} />}
     {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><div className="menu-sort"><span className="hud-kicker">Hand sortieren</span><div className="sort-control"><button className={sort === "rank" ? "is-active" : ""} aria-pressed={sort === "rank"} onClick={() => setSort("rank")}>Wert</button><button className={sort === "suit" ? "is-active" : ""} aria-pressed={sort === "suit"} onClick={() => setSort("suit")}>Farbe</button></div></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => { setMenu(false); onProfile(user.id); }}>Mein Profil</button><button onClick={() => { setMenu(false); onTutorial(); }}>Kurzanleitung</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}
     {scoreboard && <Scoreboard game={game} lobby={lobby} onClose={() => setScoreboard(false)} />}
     {showRoundResult && <RoundResultOverlay result={game.state.lastRoundResult!} nextPhase={game.state.phase} lobby={lobby} onContinue={() => setDismissedRound(game.state.lastRoundResult!.round)} />}
     {game.state.status === "FINISHED" && <FinalResultOverlay placements={game.state.placements} lobby={lobby} onLeave={onLeave} />}
   </main>;
-}
-
-// Reduced motion still gets a cue, just not a travelling one: the card pulses at
-// its destination instead of flying. "Reduced" in the ticket means less movement,
-// not a silent board where nothing is traceable.
-function CardFlight({ flight, reduced, onDone }: { flight: Flight; reduced: boolean; onDone: () => void }) {
-  const ref = useRef<HTMLImageElement>(null);
-  useLayoutEffect(() => {
-    const element = ref.current; if (!element) return onDone();
-    const scale = flight.to.width / Math.max(1, flight.from.width);
-    const target = `translate(${flight.to.left}px, ${flight.to.top}px) scale(${scale})`;
-    const animation = reduced
-      ? element.animate([{ transform: target, opacity: 0 }, { transform: target, opacity: .95, offset: .35 }, { transform: target, opacity: 0 }], { duration: 620, easing: "ease-out", fill: "forwards" })
-      : element.animate([
-          { transform: `translate(${flight.from.left}px, ${flight.from.top}px) scale(1) rotateY(${flight.flip ? "180deg" : "0deg"})`, opacity: 0 },
-          { opacity: 1, offset: .12 },
-          { transform: `${target} rotateY(0deg)`, opacity: 0 }
-        ], { duration: 520, easing: "cubic-bezier(.22,.7,.25,1)", fill: "forwards" });
-    animation.onfinish = onDone; animation.oncancel = onDone;
-    return () => animation.cancel();
-  }, []);
-  return <img className="flight-card" ref={ref} src={flight.asset} alt="" style={{ width: flight.from.width, height: flight.from.height }} />;
 }
 
 function actionText(action: RecentGameAction, lobby: Lobby, selfId: string) {
@@ -390,37 +777,6 @@ function SignalIcon({ online }: { online: boolean }) {
   return <svg className={`signal-icon ${online ? "online" : ""}`} viewBox="0 0 16 13" aria-hidden="true" focusable="false"><path d="M1 4.2a10.5 10.5 0 0 1 14 0" /><path d="M3.6 7.2a6.8 6.8 0 0 1 8.8 0" /><path d="M6.2 10.1a3 3 0 0 1 3.6 0" /></svg>;
 }
 
-// Deal choreography: the deck slides in from the left, riffle-shuffles twice,
-// then one card at a time flies to each seat (opponents to the top, own cards to
-// the hand below). The deck slides to the draw slot and a first card flips onto
-// the discard. Timings here mirror the keyframe schedule in views.css.
-const DEAL_START = 2300; // ms: dealing begins after slide-in (.9s) + shuffle (~1.3s)
-const DEAL_STEP = 95;    // ms between consecutive cards — slow enough to follow each
-// Total run time for a deal, so the caller knows when to unmount the overlay.
-function dealDurationMs(playerCount: number) { return DEAL_START + playerCount * 11 * DEAL_STEP + 200 + 700 + 1000; }
-function DealAnimation({ players, selfId }: { players: Array<{ userId: string }>; selfId: string }) {
-  const opponents = players.filter((player) => player.userId !== selfId);
-  const seatX = (userId: string) => { const index = opponents.findIndex((player) => player.userId === userId); return opponents.length ? -30 + index * (60 / Math.max(1, opponents.length - 1 || 1)) : 0; };
-  const dealEnd = DEAL_START + players.length * 11 * DEAL_STEP;
-  const deckSlotDelay = dealEnd + 200;
-  const discardDelay = deckSlotDelay + 700;
-  return <div className="deal-animation" aria-hidden="true" style={{ "--deck-slot-delay": `${deckSlotDelay}ms`, "--discard-delay": `${discardDelay}ms` } as React.CSSProperties}>
-    <img className="deal-deck" src={CARD_BACK} alt="" />
-    <img className="deal-half deal-half-a" src={CARD_BACK} alt="" />
-    <img className="deal-half deal-half-b" src={CARD_BACK} alt="" />
-    {players.flatMap((player, playerIndex) => Array.from({ length: 11 }, (_, cardIndex) => {
-      const isSelf = player.userId === selfId;
-      return <img className={`deal-card ${isSelf ? "to-self" : "to-opponent"}`} src={CARD_BACK} alt="" style={{
-        "--deal-delay": `${DEAL_START + (cardIndex * players.length + playerIndex) * DEAL_STEP}ms`,
-        "--target-x": isSelf ? `${(cardIndex - 5) * 3.2}vw` : `${seatX(player.userId) + (cardIndex - 5) * .15}vw`,
-        "--target-y": isSelf ? "40vh" : "-33vh",
-        "--target-r": `${(cardIndex - 5) * (isSelf ? 1.6 : 0.4)}deg`
-      } as React.CSSProperties} key={`${player.userId}-${cardIndex}`} />;
-    }))}
-    <img className="deal-first-discard" src="/cards/5C.svg" alt="" />
-  </div>;
-}
-
 function Scoreboard({ game, lobby, onClose }: { game: Game; lobby: Lobby; onClose: () => void }) {
   return <div className="game-result-overlay"><section className="surface result-panel"><div className="dialog-title"><div><p className="overline">Runde {game.state.round} · Phase {game.state.phase}</p><h2>Scoreboard</h2></div><button className="button-icon" onClick={onClose}>×</button></div><div className="result-table">{[...game.state.players].sort((a, b) => a.totalPenalty - b.totalPenalty).map((player) => <div className="result-row" key={player.userId}><strong>{playerName(lobby, player.userId)}</strong><span>{player.handCount} Karten</span><span>{player.coins} Münzen</span><b>{player.totalPenalty} P</b></div>)}</div></section></div>;
 }
@@ -435,10 +791,12 @@ function FinalResultOverlay({ placements, lobby, onLeave }: { placements: FinalP
 
 function playerName(lobby: Lobby, userId: string) { return lobby.players.find((entry) => entry.user.id === userId)?.user.username ?? "Spieler"; }
 
-function TurnCountdown({ deadlineAt, finished }: { deadlineAt: string | null; finished: boolean }) {
+function TurnCountdown({ opensAt, deadlineAt, finished }: { opensAt: string | null; deadlineAt: string | null; finished: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 250); return () => window.clearInterval(timer); }, []);
   if (finished) return null;
+  const preparing = opensAt ? Math.max(0, Math.ceil((Date.parse(opensAt) - now) / 1000)) : 0;
+  if (preparing > 0) return <span className="turn-countdown" aria-label={`Spielstart in ${preparing} Sekunden`}>…</span>;
   const remaining = deadlineAt ? Math.max(0, Math.ceil((Date.parse(deadlineAt) - now) / 1000)) : null;
   return <span className={`turn-countdown ${remaining !== null && remaining <= 10 ? "is-urgent" : ""}`} aria-label={remaining === null ? "Keine Zugbegrenzung" : `${remaining} Sekunden verbleibend`}>{remaining === null ? "∞" : `${remaining}s`}</span>;
 }
@@ -639,12 +997,6 @@ function Avatar({ user, large = false, onClick }: { user: Pick<User, "id" | "use
 
 function Orientation({ portrait, landscape }: { portrait?: boolean; landscape?: boolean }) { return <div className="orientation-notice"><div><div className="rotate-icon">↻</div><h2>Gerät drehen</h2><p className="muted">Diese Ansicht ist für {portrait ? "Hochformat" : landscape ? "Querformat" : "eine andere Ausrichtung"} gestaltet.</p></div></div>; }
 function Connection({ connected }: { connected: boolean }) { return <span className={`connection ${connected ? "online" : ""}`}>{connected ? "Online" : "Verbinde"}</span>; }
-function suitSymbol(suit: string) { return ({ clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠" } as Record<string, string>)[suit] ?? "?"; }
-function cardLabel(card: Card) { return card.kind === "joker" ? "Joker" : `${card.rank} ${suitSymbol(card.suit)}`; }
-function cardAsset(card: Card) { if (card.kind === "joker") return "/cards/J.png"; const rank = card.rank === "10" ? "T" : card.rank; const suit = ({ clubs: "C", diamonds: "D", hearts: "H", spades: "S" } as Record<string, string>)[card.suit]; return `/cards/${rank}${suit}.svg`; }
-function CardFace({ card }: { card: Card }) { return <img className="card-face" src={cardAsset(card)} alt={cardLabel(card)} draggable={false} />; }
-function isRed(card: Card) { return card.kind === "standard" && (card.suit === "hearts" || card.suit === "diamonds"); }
-function cardSort(a: Card, b: Card, mode: "rank" | "suit") { const rank = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]; const av = a.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(a.rank) : a.suit.localeCompare(b.kind === "standard" ? b.suit : "zz"); const bv = b.kind === "joker" ? 99 : mode === "rank" ? rank.indexOf(b.rank) : 0; return typeof av === "number" && typeof bv === "number" ? av - bv : 0; }
 // Splits a selection into the combinations the current phase demands. Throws when
 // the shape is wrong; canLayPhase() turns that into a plain boolean for the UI.
 function phaseGroups(cards: Card[], phase: number): Card[][] {
