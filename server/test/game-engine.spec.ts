@@ -18,7 +18,7 @@ const baseState = (): GameState => ({
   drawPile: [card("3c", "3")],
   discardPile: [card("10c", "10")],
   melds: [],
-  turn: { hasDrawn: false, deadlineAt: "2026-07-15T12:00:00.000Z" },
+  turn: { hasDrawn: false, opensAt: null, deadlineAt: "2026-07-15T12:00:00.000Z" },
   discardOffer: null,
   roundEndedById: null,
   roundResults: [],
