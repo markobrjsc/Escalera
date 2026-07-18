@@ -18,9 +18,21 @@ model User {
   updatedAt          DateTime              @updatedAt
   sessions           Session[]
   statistic          UserStatistic?
+  audioPreference    UserAudioPreference?
   achievementProgress AchievementProgress[]
   hostedLobbies       Lobby[]              @relation("LobbyHost")
   lobbyMemberships    LobbyPlayer[]
+}
+
+model UserAudioPreference {
+  userId    String   @id
+  master    Int      @default(72)
+  music     Int      @default(34)
+  ui        Int      @default(64)
+  game      Int      @default(76)
+  muted     Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum LobbyStatus {

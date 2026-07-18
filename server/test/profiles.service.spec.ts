@@ -33,4 +33,18 @@ describe("Profilbilder", () => {
     expect(avatarKey).toBeNull();
     expect(storage.deleteProfileImages).toHaveBeenLastCalledWith([`${currentKey}-128.webp`, `${currentKey}-512.webp`]);
   });
+
+  it("liefert sichere Audio-Defaults und speichert alle privaten Pegel", async () => {
+    const prisma = {
+      userAudioPreference: {
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(async ({ create }: { create: object }) => create)
+      }
+    };
+    const service = new ProfilesService(prisma as never, {} as never);
+
+    await expect(service.getAudioPreferences("user")).resolves.toEqual({ master: 72, music: 34, ui: 64, game: 76, muted: false });
+    await expect(service.updateAudioPreferences("user", { master: 81, music: 22, ui: 57, game: 69, muted: true })).resolves.toMatchObject({ master: 81, music: 22, ui: 57, game: 69, muted: true });
+    expect(prisma.userAudioPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user" }, update: { master: 81, music: 22, ui: 57, game: 69, muted: true } }));
+  });
 });

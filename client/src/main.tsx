@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { PileDesignView } from "./PileDesignView.js";
 import { initMotionPreference } from "./fx.js";
+import { AudioProvider } from "./audio.js";
 import "./styles.css";
 
 initMotionPreference();
@@ -13,6 +14,6 @@ const designRoute = window.location.pathname.replace(/\/+$/, "") === "/design/pi
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {designRoute ? <PileDesignView /> : <App />}
+    <AudioProvider>{designRoute ? <PileDesignView /> : <App />}</AudioProvider>
   </StrictMode>
 );
