@@ -225,17 +225,17 @@
 .buy-button.is-available { border-color: var(--color-waiting); background: #6b583633; color: var(--color-waiting); box-shadow: 0 0 calc(.7 * var(--u)) #d8be6a44; }
 
 /* The meld zone is a plain area: only the cards themselves carry any chrome. */
-.meld-zone { display: grid; height: 100%; min-height: 0; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(38 * var(--u))), 1fr)); grid-auto-rows: calc(15 * var(--u)); align-content: start; gap: var(--gap); overflow-y: auto; overscroll-behavior: contain; border: var(--hair) dashed #52796f55; border-radius: var(--radius-sm); padding: var(--gap); background: transparent; scrollbar-width: none; }
+.meld-zone { display: grid; height: 100%; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: calc(20 * var(--u)); align-content: start; gap: var(--gap); overflow-y: auto; overscroll-behavior: contain; border: var(--hair) dashed #52796f55; border-radius: var(--radius-sm); padding: var(--gap); background: transparent; scrollbar-width: none; }
 .meld-zone::-webkit-scrollbar { display: none; }
 .meld-zone:has(> .empty-meld) { grid-auto-rows: minmax(0, 2fr); }
 .empty-meld { display: grid; grid-column: 1 / -1; place-content: center; justify-items: center; gap: calc(.2 * var(--u)); color: var(--color-muted); text-align: center; text-transform: uppercase; }
 .empty-meld-icon { color: var(--color-teal); font-size: calc(6 * var(--fu)); }
 .empty-meld strong { color: var(--color-white); font-family: var(--font-display); font-size: var(--t-md); letter-spacing: .04em; }
 .empty-meld > span:last-child { font-size: var(--t-xs); }
-.meld-card { display: grid; min-width: 0; min-height: 0; align-items: center; border: var(--hair) solid transparent; border-radius: var(--radius-sm); padding: calc(.3 * var(--u)); background: transparent; cursor: default; }
+.meld-card { display: grid; min-width: 0; min-height: 0; align-items: center; border: var(--hair) solid transparent; border-radius: var(--radius-sm); padding: calc(.55 * var(--u)); background: transparent; cursor: default; }
 /* Cards sit flush left with a small gap; when the row runs out of room the gap
    goes negative on its own and they overlap instead of shrinking. */
-.meld-cards { --face-h: calc(12 * var(--u)); --face-w: calc(var(--face-h) * 5 / 7); display: flex; min-width: 0; align-items: center; justify-content: flex-start; }
+.meld-cards { --face-h: calc(16.5 * var(--u)); --face-w: calc(var(--face-h) * 5 / 7); display: flex; min-width: 0; align-items: center; justify-content: flex-start; }
 .meld-cards .card-face { width: var(--face-w); height: var(--face-h); flex: 0 0 auto; margin-right: min(calc(.5 * var(--u)), calc((100% - var(--meld-count) * var(--face-w)) / max(1, var(--meld-count) - 1))); border-radius: var(--radius-sm); object-fit: cover; box-shadow: calc(-.15 * var(--u)) 0 calc(.2 * var(--u)) #0007; }
 .meld-cards .card-face:last-child { margin-right: 0; }
 
