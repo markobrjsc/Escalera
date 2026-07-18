@@ -48,6 +48,45 @@ function unlockedIds(stats: StatBag): string[] {
 export class StatisticsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Persist one accepted state transition inside the same transaction as the
+  // game version. Deltas make retries idempotent and profiles update live.
+  async recordGameProgress(tx: Prisma.TransactionClient, before: GameState, after: GameState) {
+    for (const player of after.players) {
+      const previous = before.players.find((entry) => entry.userId === player.userId);
+      if (!previous) continue;
+      const existing = await tx.userStatistic.findUnique({ where: { userId: player.userId } });
+      const phaseWinsMask = after.roundResults.slice(before.roundResults.length)
+        .filter((round) => round.endedById === player.userId)
+        .reduce((mask, round) => mask | (1 << (round.phase - 1)), existing?.phaseWinsMask ?? 0);
+      const finished = before.status !== "FINISHED" && after.status === "FINISHED";
+      const placement = after.placements.find((entry) => entry.userId === player.userId)?.rank ?? 99;
+      const values = {
+        gamesPlayed: finished ? 1 : 0,
+        gamesWon: finished && placement === 1 ? 1 : 0,
+        podiumFinishes: finished && placement <= 3 ? 1 : 0,
+        totalPenalty: player.totalPenalty - previous.totalPenalty,
+        phasesLaid: player.metrics.phasesLaid - previous.metrics.phasesLaid,
+        meldsLaid: player.metrics.meldsLaid - previous.metrics.meldsLaid,
+        jokersPlayed: player.metrics.jokersPlayed - previous.metrics.jokersPlayed,
+        cardsBought: player.metrics.cardsBought - previous.metrics.cardsBought,
+        timeouts: player.timeouts - previous.timeouts,
+        reconnects: player.disconnectSkips - previous.disconnectSkips,
+        movesPlayed: player.metrics.movesPlayed - previous.metrics.movesPlayed,
+        coinPenalty: finished ? player.coins * COIN_PENALTY : 0
+      };
+      const longestStreet = Math.max(existing?.longestStreet ?? 0, player.metrics.longestStreet);
+      await tx.userStatistic.upsert({
+        where: { userId: player.userId },
+        create: { userId: player.userId, ...values, longestStreet, phaseWinsMask },
+        update: { gamesPlayed: { increment: values.gamesPlayed }, gamesWon: { increment: values.gamesWon }, podiumFinishes: { increment: values.podiumFinishes }, totalPenalty: { increment: values.totalPenalty }, phasesLaid: { increment: values.phasesLaid }, meldsLaid: { increment: values.meldsLaid }, jokersPlayed: { increment: values.jokersPlayed }, cardsBought: { increment: values.cardsBought }, timeouts: { increment: values.timeouts }, reconnects: { increment: values.reconnects }, movesPlayed: { increment: values.movesPlayed }, coinPenalty: { increment: values.coinPenalty }, longestStreet, phaseWinsMask }
+      });
+      const stored = await tx.userStatistic.findUniqueOrThrow({ where: { userId: player.userId } });
+      const already = new Set((await tx.achievementProgress.findMany({ where: { userId: player.userId }, select: { achievement: true } })).map((row) => row.achievement));
+      const fresh = unlockedIds(stored as StatBag).filter((id) => !already.has(id));
+      if (fresh.length) await tx.achievementProgress.createMany({ data: fresh.map((achievement) => ({ userId: player.userId, achievement, progress: 1, unlockedAt: new Date() })) });
+    }
+  }
+
   async recordFinishedGame(gameId: string, state: GameState) {
     try {
       await this.prisma.$transaction(async (tx) => {
