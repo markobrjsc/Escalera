@@ -64,6 +64,14 @@ export class LobbiesController {
     return { deleted: result.deleted };
   }
 
+  @Post(":code/players/:userId/kick")
+  async kick(@Req() request: AuthenticatedRequest, @Param("code") code: string, @Param("userId") userId: string) {
+    const result = await this.lobbies.kick(request.user.id, code, userId);
+    await this.realtime.evictPlayer(result.code, userId, "kicked");
+    await this.realtime.publishLobby(result.code);
+    return result.lobby;
+  }
+
   @Post(":code/start")
   async start(@Req() request: AuthenticatedRequest, @Param("code") code: string) {
     const lobby = await this.lobbies.start(request.user.id, code);

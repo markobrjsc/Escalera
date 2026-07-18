@@ -99,6 +99,17 @@ export class LobbiesService {
     return { deleted: false as const, code: lobby.code, lobby: await this.getLobby(lobby.code) };
   }
 
+  async kick(hostId: string, code: string, targetUserId: string) {
+    const lobby = await this.getLobby(code);
+    if (lobby.hostId !== hostId) throw new ForbiddenException("Nur der Gastgeber kann Spieler kicken.");
+    if (targetUserId === hostId) throw new BadRequestException("Der Gastgeber kann sich nicht selbst kicken.");
+    const player = lobby.players.find((entry) => entry.userId === targetUserId);
+    if (!player) throw new NotFoundException("Spieler ist nicht Mitglied dieser Lobby.");
+
+    await this.prisma.lobbyPlayer.delete({ where: { id: player.id } });
+    return { code: lobby.code, lobby: this.publicLobby(await this.getLobby(lobby.code)) };
+  }
+
   async start(userId: string, code: string) {
     const lobby = await this.getLobby(code);
     if (lobby.hostId !== userId) throw new ForbiddenException("Nur der Gastgeber kann starten.");

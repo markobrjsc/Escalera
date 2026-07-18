@@ -28,4 +28,8 @@ export class PresenceService {
   connectedCount(code: string) {
     return this.connections.get(code)?.size ?? 0;
   }
+
+  connectedUserIds(code: string) {
+    return [...(this.connections.get(code)?.keys() ?? [])];
+  }
 }
