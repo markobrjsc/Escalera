@@ -18,10 +18,24 @@ type VoicePeer = {
 };
 
 const STORAGE_KEY = "escalera:voice-participants";
+const SELF_MUTE_STORAGE_KEY = "escalera:voice-self-muted";
 const DEFAULT_AUDIO: ParticipantAudio = { volume: 1, muted: false };
 
 export function normalizeParticipantVolume(volume: number) {
   return Math.min(1, Math.max(0, Number.isFinite(volume) ? volume : 1));
+}
+
+export function applySelfMute(stream: Pick<MediaStream, "getAudioTracks">, muted: boolean) {
+  stream.getAudioTracks().forEach((track) => { track.enabled = !muted; });
+}
+
+export function readSelfMuted(storage: Pick<Storage, "getItem">) {
+  try { return storage.getItem(SELF_MUTE_STORAGE_KEY) === "true"; }
+  catch { return false; }
+}
+
+export function writeSelfMuted(storage: Pick<Storage, "setItem">, muted: boolean) {
+  try { storage.setItem(SELF_MUTE_STORAGE_KEY, String(muted)); } catch { /* storage is optional */ }
 }
 
 function loadPreferences(): Record<string, ParticipantAudio> {
@@ -49,12 +63,20 @@ export function useLobbyVoice(
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [notice, setNotice] = useState("");
   const [preferences, setPreferences] = useState<Record<string, ParticipantAudio>>(loadPreferences);
+  const [selfMuted, setSelfMuted] = useState(() => readSelfMuted(localStorage));
   const preferencesRef = useRef(preferences);
+  const selfMutedRef = useRef(selfMuted);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef(new Map<string, VoicePeer>());
   const connectedRef = useRef(connectedUserIds);
   const reconcileRef = useRef<(userIds: string[]) => void>(() => undefined);
 
   useEffect(() => { preferencesRef.current = preferences; savePreferences(preferences); }, [preferences]);
+  useEffect(() => {
+    selfMutedRef.current = selfMuted;
+    writeSelfMuted(localStorage, selfMuted);
+    if (localStreamRef.current) applySelfMute(localStreamRef.current, selfMuted);
+  }, [selfMuted]);
   useEffect(() => {
     connectedRef.current = connectedUserIds;
     reconcileRef.current(connectedUserIds);
@@ -83,6 +105,8 @@ export function useLobbyVoice(
   const toggleMuted = useCallback((targetUserId: string) => {
     updatePreference(targetUserId, (current) => ({ ...current, muted: !current.muted }));
   }, [updatePreference]);
+
+  const toggleSelfMuted = useCallback(() => setSelfMuted((current) => !current), []);
 
   useEffect(() => {
     if (!socket || !lobbyCode || !userId) {
@@ -123,6 +147,8 @@ export function useLobbyVoice(
         });
         if (disposed) { stream.getTracks().forEach((track) => track.stop()); return null; }
         localStream = stream;
+        localStreamRef.current = stream;
+        applySelfMute(stream, selfMutedRef.current);
         setStatus("connected");
         return stream;
       } catch {
@@ -222,6 +248,7 @@ export function useLobbyVoice(
       socket.off("voice:signal", onSignal);
       for (const targetUserId of [...peers.keys()]) closePeer(targetUserId);
       localStream?.getTracks().forEach((track) => track.stop());
+      if (localStreamRef.current === localStream) localStreamRef.current = null;
       setStatus("idle");
       setNotice("");
     };
@@ -230,8 +257,11 @@ export function useLobbyVoice(
   return useMemo(() => ({
     status,
     notice,
+    selfMuted,
+    canSelfMute: status === "connected",
     participant: (targetUserId: string) => preferences[targetUserId] ?? DEFAULT_AUDIO,
     setVolume,
-    toggleMuted
-  }), [notice, preferences, setVolume, status, toggleMuted]);
+    toggleMuted,
+    toggleSelfMuted
+  }), [notice, preferences, selfMuted, setVolume, status, toggleMuted, toggleSelfMuted]);
 }
