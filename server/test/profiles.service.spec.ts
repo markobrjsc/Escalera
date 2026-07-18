@@ -43,8 +43,8 @@ describe("Profilbilder", () => {
     };
     const service = new ProfilesService(prisma as never, {} as never);
 
-    await expect(service.getAudioPreferences("user")).resolves.toEqual({ master: 72, music: 34, ui: 64, game: 76, muted: false });
-    await expect(service.updateAudioPreferences("user", { master: 81, music: 22, ui: 57, game: 69, muted: true })).resolves.toMatchObject({ master: 81, music: 22, ui: 57, game: 69, muted: true });
-    expect(prisma.userAudioPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user" }, update: { master: 81, music: 22, ui: 57, game: 69, muted: true } }));
+    await expect(service.getAudioPreferences("user")).resolves.toEqual({ music: 60, effects: 72, muted: false });
+    await expect(service.updateAudioPreferences("user", { music: 58, effects: 81, muted: true })).resolves.toMatchObject({ music: 58, effects: 81, muted: true });
+    expect(prisma.userAudioPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user" }, update: { music: 58, effects: 81, muted: true } }));
   });
 });

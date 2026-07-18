@@ -7,7 +7,7 @@ import type { AudioPreferencesDto } from "./audio-preferences.dto.js";
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_IMAGE_FORMATS = new Set(["jpeg", "png", "webp"]);
-export const DEFAULT_AUDIO_PREFERENCES = { master: 72, music: 34, ui: 64, game: 76, muted: false } as const;
+export const DEFAULT_AUDIO_PREFERENCES = { music: 60, effects: 72, muted: false } as const;
 
 @Injectable()
 export class ProfilesService {
@@ -68,17 +68,17 @@ export class ProfilesService {
   async getAudioPreferences(userId: string) {
     return await this.prisma.userAudioPreference.findUnique({
       where: { userId },
-      select: { master: true, music: true, ui: true, game: true, muted: true }
+      select: { music: true, effects: true, muted: true }
     }) ?? DEFAULT_AUDIO_PREFERENCES;
   }
 
   updateAudioPreferences(userId: string, input: AudioPreferencesDto) {
-    const data = { master: input.master, music: input.music, ui: input.ui, game: input.game, muted: input.muted };
+    const data = { music: input.music, effects: input.effects, muted: input.muted };
     return this.prisma.userAudioPreference.upsert({
       where: { userId },
       create: { userId, ...data },
       update: data,
-      select: { master: true, music: true, ui: true, game: true, muted: true }
+      select: { music: true, effects: true, muted: true }
     });
   }
 

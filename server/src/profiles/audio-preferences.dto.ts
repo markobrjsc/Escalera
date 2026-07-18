@@ -4,22 +4,12 @@ export class AudioPreferencesDto {
   @IsInt()
   @Min(0)
   @Max(100)
-  master!: number;
-
-  @IsInt()
-  @Min(0)
-  @Max(100)
   music!: number;
 
   @IsInt()
   @Min(0)
   @Max(100)
-  ui!: number;
-
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  game!: number;
+  effects!: number;
 
   @IsBoolean()
   muted!: boolean;
