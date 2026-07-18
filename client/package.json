@@ -8,6 +8,7 @@
     "dev": "vite",
     "prebuild": "npm run build --workspace=@escalera/game-rules",
     "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
     "pretypecheck": "npm run build --workspace=@escalera/game-rules",
     "typecheck": "tsc --noEmit"
   },

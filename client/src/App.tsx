@@ -5,6 +5,8 @@ import type { Card, Phase } from "@escalera/game-rules";
 import { CARD_BACK, CardFace, cardAsset, cardLabel, cardSort, PileStack } from "./cards.js";
 import { BOARD_TILT, DealStage, DEAL_TIMING, FlightLayer, MatchStartOverlay, MATCH_INTRO_MS, MATCH_INTRO_REDUCED_MS, SlideStage, fitCardRect, usePrefersReducedMotion } from "./fx.js";
 import type { FlightSpec, Rect } from "./fx.js";
+import { audioCueForGameAction, audioSceneForView, useAudio } from "./audio.js";
+import type { AudioPreferences } from "./audio.js";
 
 const API_URL = "/api";
 const SOCKET_URL = window.location.origin;
@@ -63,6 +65,7 @@ class ApiError extends Error { constructor(message: string, readonly body: unkno
 
 export function App() {
   const reduced = usePrefersReducedMotion();
+  const { play: playAudio, setScene: setAudioScene, setPreferences: setAudioPreferences } = useAudio();
   const [user, setUser] = useState<User | null>(null);
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [game, setGame] = useState<Game | null>(null);
@@ -77,6 +80,7 @@ export function App() {
   const achievementsSeen = useRef(new Set<string>());
   const lobbyScope = useRef<string | null>(null);
   const acceptedGame = useRef<{ code: string; version: number } | null>(null);
+  const connectedOnce = useRef(false);
 
   // HTTP responses and realtime packets share one monotonic gate. Entering a
   // different lobby deliberately starts a fresh version scope; late results
@@ -112,7 +116,10 @@ export function App() {
       .then((profile) => {
         const fresh = profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlockedAt !== null && Date.now() - Date.parse(node.unlockedAt) < 30_000 && !achievementsSeen.current.has(node.id));
         fresh.forEach((node) => achievementsSeen.current.add(node.id));
-        if (fresh.length) setUnlocks((current) => [...current.filter((node) => !fresh.some((next) => next.id === node.id)), ...fresh]);
+        if (fresh.length) {
+          setUnlocks((current) => [...current.filter((node) => !fresh.some((next) => next.id === node.id)), ...fresh]);
+          playAudio("achievement", { dedupeKey: fresh.map((node) => node.id).join("|") });
+        }
       })
       .catch(() => undefined);
   }, [game?.version, lobby?.code, user?.id]);
@@ -129,8 +136,12 @@ export function App() {
   }, [acceptGame, enterLobbyScope]);
   useEffect(() => {
     if (!user) return;
+    void api<AudioPreferences>("/profile/audio").then(setAudioPreferences).catch(() => undefined);
+  }, [setAudioPreferences, user?.id]);
+  useEffect(() => {
+    if (!user) return;
     const live = io(`${SOCKET_URL}/realtime`, { withCredentials: true, transports: ["websocket"] });
-    live.on("realtime:connected", () => { setConnected(true); setSocket(live); }); live.on("disconnect", () => { setConnected(false); setSocket(null); });
+    live.on("realtime:connected", () => { if (connectedOnce.current) playAudio("connection"); connectedOnce.current = true; setConnected(true); setSocket(live); }); live.on("disconnect", () => { if (connectedOnce.current) playAudio("disconnect"); setConnected(false); setSocket(null); });
     live.on("lobby:update", (value: Lobby) => { if (lobbyScope.current === value.code.toUpperCase()) setLobby(value); });
     live.on("game:update", (value: { code: string; game: Game }) => acceptGame(value.code, value.game));
     live.on("lobbies:update", () => setLobbyRevision((value) => value + 1));
@@ -140,8 +151,25 @@ export function App() {
   useEffect(() => { if (!socket || !lobby?.code) return; socket.emit("lobby:watch", { code: lobby.code }); return () => { socket.emit("lobby:unwatch", { code: lobby.code }); }; }, [socket, lobby?.code]);
 
   const openLobby = async (code: string) => { const value = await api<Lobby>(`/lobbies/${code}`); enterLobbyScope(value.code); setLobby(value); if (value.status === "ACTIVE") acceptGame(value.code, await api<Game>(`/lobbies/${value.code}/game`)); };
-  const leaveLobby = async () => { if (!lobby) return; await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" }); setLobby(null); resetLobbyScope(); };
-  const logout = async () => { await api("/auth/logout", { method: "POST", body: "{}" }); setUser(null); setLobby(null); resetLobbyScope(); setError(""); };
+  const leaveLobby = async () => {
+    if (!lobby) return;
+    try {
+      await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" });
+      setLobby(null);
+      resetLobbyScope();
+      playAudio("close");
+    } catch (reason) { setError(message(reason)); }
+  };
+  const logout = async () => {
+    try {
+      await api("/auth/logout", { method: "POST", body: "{}" });
+      setUser(null);
+      setLobby(null);
+      resetLobbyScope();
+      setError("");
+      playAudio("close");
+    } catch (reason) { setError(message(reason)); }
+  };
   const updateUser = (next: User) => {
     setUser(next);
     setLobby((current) => current ? {
@@ -156,6 +184,13 @@ export function App() {
   // while /auth/me hydrates would replay "Alle Spieler bereit" on every reload
   // of an already active game.
   const viewKey = !user ? "access" : game && lobby && lobby.status !== "OPEN" ? "game" : lobby ? "lobby" : "list";
+  const previousAudioView = useRef<string | null>(null);
+  useEffect(() => {
+    setAudioScene(audioSceneForView(viewKey));
+    if (previousAudioView.current && previousAudioView.current !== viewKey) playAudio("scene", { dedupeKey: `${previousAudioView.current}-${viewKey}-${Date.now()}` });
+    previousAudioView.current = viewKey;
+  }, [playAudio, setAudioScene, viewKey]);
+  useEffect(() => { if (error) playAudio("error"); }, [error, playAudio]);
   const committedView = useRef<string | null>(null);
   const [matchIntro, setMatchIntro] = useState(false);
   useLayoutEffect(() => {
@@ -166,7 +201,8 @@ export function App() {
     setProfileUserId(null);
     setTutorialOpen(false);
     setMatchIntro(true);
-  }, [loading, viewKey]);
+    playAudio("gameStart", { dedupeKey: `${lobby?.code ?? "game"}-${game?.state.round ?? 1}` });
+  }, [game?.state.round, loading, lobby?.code, playAudio, viewKey]);
   useEffect(() => {
     if (!matchIntro) return;
     const timer = window.setTimeout(() => setMatchIntro(false), reduced ? MATCH_INTRO_REDUCED_MS : MATCH_INTRO_MS);
@@ -206,6 +242,7 @@ function AchievementToasts({ unlocks, onDismiss }: { unlocks: AchievementNode[];
 }
 
 function AccessView({ intro, error, setError, onAccess }: { intro: boolean; error: string; setError: (value: string) => void; onAccess: (user: User, created: boolean) => void }) {
+  const { play: playAudio } = useAudio();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -214,6 +251,7 @@ function AccessView({ intro, error, setError, onAccess }: { intro: boolean; erro
   const [busy, setBusy] = useState(false);
   const access = async (registration: boolean) => {
     const result = await api<{ user: User; created: boolean }>("/auth/access", { method: "POST", body: JSON.stringify({ username, password, ...(registration ? { passwordConfirmation: confirmation, acceptPasswordLoss: accepted } : {}) }) });
+    playAudio(result.created ? "register" : "login");
     onAccess(result.user, result.created);
   };
   const submit = async (event: FormEvent) => {
@@ -221,13 +259,14 @@ function AccessView({ intro, error, setError, onAccess }: { intro: boolean; erro
     try {
       if (registering) { await access(true); return; }
       const { exists } = await api<{ exists: boolean }>(`/auth/username?username=${encodeURIComponent(username)}`);
-      if (exists) await access(false); else setRegistering(true);
+      if (exists) await access(false); else { setRegistering(true); playAudio("open"); }
     } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
   };
-  return <main className={`portrait-view login-view ${intro ? "is-intro" : ""}`}><Orientation portrait /><section className={`surface login-card ${registering ? "registration-card" : ""}`}><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => { setUsername(event.target.value); setRegistering(false); }} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => { setPassword(event.target.value); setRegistering(false); }} minLength={12} type="password" autoComplete={registering ? "new-password" : "current-password"} required /></label>{registering && <><label>Passwort wiederholen<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} type="password" autoComplete="new-password" required /></label><label className="registration-warning"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>Ich verstehe: Ohne dieses Passwort kann mein Konto nicht wiederhergestellt werden.</span></label></>}{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : registering ? "Konto verbindlich erstellen" : "Weiter"}</button>{registering && <button type="button" className="button-quiet" onClick={() => setRegistering(false)}>Zurück zur Anmeldung</button>}</form><p className="login-note muted">Ist dein Name noch frei, bestätigst du im nächsten Schritt bewusst die Registrierung.</p></section></main>;
+  return <main className={`portrait-view login-view ${intro ? "is-intro" : ""}`}><Orientation portrait /><section className={`surface login-card ${registering ? "registration-card" : ""}`}><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><span className="brand-suit suit-red">♥</span><h1 className="brand">Escalera</h1><span className="brand-suit">♣</span><span className="brand-suit suit-red">♦</span></div><form onSubmit={submit}><label>Benutzername<input value={username} onChange={(event) => { setUsername(event.target.value); setRegistering(false); }} minLength={3} maxLength={24} autoComplete="username" required /></label><label>Passwort<input value={password} onChange={(event) => { setPassword(event.target.value); setRegistering(false); }} minLength={12} type="password" autoComplete={registering ? "new-password" : "current-password"} required /></label>{registering && <><label>Passwort wiederholen<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} type="password" autoComplete="new-password" required /></label><label className="registration-warning"><input type="checkbox" checked={accepted} onChange={(event) => { setAccepted(event.target.checked); playAudio(event.target.checked ? "success" : "close"); }} required /><span>Ich verstehe: Ohne dieses Passwort kann mein Konto nicht wiederhergestellt werden.</span></label></>}{error && <p className="error" role="alert">{error}</p>}<button className="button-primary" disabled={busy}>{busy ? "Einen Moment …" : registering ? "Konto verbindlich erstellen" : "Weiter"}</button>{registering && <button type="button" className="button-quiet" data-audio="close" onClick={() => setRegistering(false)}>Zurück zur Anmeldung</button>}</form><p className="login-note muted">Ist dein Name noch frei, bestätigst du im nächsten Schritt bewusst die Registrierung.</p></section></main>;
 }
 
 function LobbyListView({ user, connected, revision, error, setError, onLobby, onLogout, onProfile }: { user: User; connected: boolean; revision: number; error: string; setError: (value: string) => void; onLobby: (code: string) => Promise<void>; onLogout: () => Promise<void>; onProfile: () => void }) {
+  const { play: playAudio } = useAudio();
   const [lobbies, setLobbies] = useState<Lobby[]>([]); const [search, setSearch] = useState(""); const [dialog, setDialog] = useState(false); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(false);
   const searchRef = useRef(search); searchRef.current = search;
   const refresh = useCallback(async (query: string) => {
@@ -237,11 +276,12 @@ function LobbyListView({ user, connected, revision, error, setError, onLobby, on
   }, [setError]);
   useEffect(() => { void refresh(""); const timer = window.setInterval(() => void refresh(searchRef.current), 10_000); return () => window.clearInterval(timer); }, [refresh]);
   useEffect(() => { if (revision > 0) void refresh(searchRef.current); }, [revision, refresh]);
-  const join = async (code: string) => { setBusy(true); setError(""); try { await api(`/lobbies/${code}/join`, { method: "POST", body: "{}" }); await onLobby(code); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
-  return <main className="portrait-view lobby-list-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Abmelden" onClick={() => void onLogout()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={onProfile}><Avatar user={user} /></button></header><section className="lobby-list-content"><div className="welcome-row"><h2 className="welcome">Willkommen, {user.username}</h2><Connection connected={connected} /></div><hr className="lobby-divider" /><form className="lobby-tools" onSubmit={(event) => { event.preventDefault(); void refresh(search); }}><input aria-label="Lobbys durchsuchen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Lobbyname …" /><button className="button-icon" aria-label="Suchen">⌕</button><button type="button" className="button-primary create-button" aria-label="Lobby erstellen" onClick={() => setDialog(true)}>+</button></form>{error && <p className="error">{error}</p>}<section className="surface lobby-browser" aria-busy={!loaded}><div className="list-title"><h3>Offene Lobbys</h3><span className="badge">{loaded ? lobbies.length : "…"}</span></div><div className="lobby-scroll">{!loaded ? <div className="empty-state lobby-loading" role="status"><strong>Lobbys werden gemischt …</strong><span className="muted">Einen Moment bitte.</span></div> : lobbies.length ? lobbies.map((entry, index) => <article className="surface lobby-card" style={{ "--lobby-index": index } as React.CSSProperties} key={entry.code}><div className="lobby-card-info"><strong>{entry.name}</strong><div className="lobby-meta"><span className="lobby-pill">{entry.code}</span><span className="lobby-pill">{entry.players.length}/{entry.settings.maxPlayers} Spieler</span><span className="lobby-pill">Erstellt von {entry.host.username}</span></div></div><button className="join-button" disabled={busy} onClick={() => void join(entry.code)}>Beitreten</button></article>) : <div className="empty-state"><strong>Noch keine Lobby offen.</strong><span className="muted">Erstelle die erste Runde.</span></div>}</div></section></section>{dialog && <LobbySettingsDialog defaultName={`${user.username}'s Lobby`} onClose={() => setDialog(false)} onCreated={onLobby} setError={setError} />}</main>;
+  const join = async (code: string) => { setBusy(true); setError(""); try { await api(`/lobbies/${code}/join`, { method: "POST", body: "{}" }); playAudio("lobbyJoin"); await onLobby(code); } catch (reason) { setError(message(reason)); } finally { setBusy(false); } };
+  return <main className="portrait-view lobby-list-view"><Orientation portrait /><header className="app-header"><button className="logout-button" data-audio="close" aria-label="Abmelden" onClick={() => void onLogout()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" data-audio="open" aria-label="Profil öffnen" onClick={onProfile}><Avatar user={user} /></button></header><section className="lobby-list-content"><div className="welcome-row"><h2 className="welcome">Willkommen, {user.username}</h2><Connection connected={connected} /></div><hr className="lobby-divider" /><form className="lobby-tools" onSubmit={(event) => { event.preventDefault(); void refresh(search); }}><input aria-label="Lobbys durchsuchen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Lobbyname …" /><button className="button-icon" aria-label="Suchen">⌕</button><button type="button" className="button-primary create-button" data-audio="open" aria-label="Lobby erstellen" onClick={() => setDialog(true)}>+</button></form>{error && <p className="error">{error}</p>}<section className="surface lobby-browser" aria-busy={!loaded}><div className="list-title"><h3>Offene Lobbys</h3><span className="badge">{loaded ? lobbies.length : "…"}</span></div><div className="lobby-scroll">{!loaded ? <div className="empty-state lobby-loading" role="status"><strong>Lobbys werden gemischt …</strong><span className="muted">Einen Moment bitte.</span></div> : lobbies.length ? lobbies.map((entry, index) => <article className="surface lobby-card" style={{ "--lobby-index": index } as React.CSSProperties} key={entry.code}><div className="lobby-card-info"><strong>{entry.name}</strong><div className="lobby-meta"><span className="lobby-pill">{entry.code}</span><span className="lobby-pill">{entry.players.length}/{entry.settings.maxPlayers} Spieler</span><span className="lobby-pill">Erstellt von {entry.host.username}</span></div></div><button className="join-button" disabled={busy} onClick={() => void join(entry.code)}>Beitreten</button></article>) : <div className="empty-state"><strong>Noch keine Lobby offen.</strong><span className="muted">Erstelle die erste Runde.</span></div>}</div></section></section>{dialog && <LobbySettingsDialog defaultName={`${user.username}'s Lobby`} onClose={() => setDialog(false)} onCreated={onLobby} setError={setError} />}</main>;
 }
 
 function LobbySettingsDialog({ onClose, onCreated, setError, lobby, defaultName }: { onClose: () => void; onCreated?: (code: string) => Promise<void>; setError: (value: string) => void; lobby?: Lobby; defaultName?: string }) {
+  const { play: playAudio } = useAudio();
   const initial = lobby?.settings ?? { maxPlayers: 4, jokersPerPlayer: 1, maxTurnSeconds: 60, streetsRequireSameSuit: true, confirmTurnEnd: true };
   const [name, setName] = useState(lobby?.name ?? defaultName ?? "");
   const [phase, setPhase] = useState<"open" | "submitting" | "closing">("open"); const [settings, setSettings] = useState({ ...initial, maxTurnSeconds: initial.maxTurnSeconds ?? 60 });
@@ -274,6 +314,7 @@ function LobbySettingsDialog({ onClose, onCreated, setError, lobby, defaultName 
     try {
       const { confirmTurnEnd: _confirmTurnEnd, ...lobbySettings } = settings;
       const saved = await api<Lobby>(lobby ? `/lobbies/${lobby.code}/settings` : "/lobbies", { method: "POST", body: JSON.stringify({ ...lobbySettings, name: name.trim() }) });
+      playAudio(lobby ? "success" : "lobbyCreate");
       close(() => { if (!lobby) onCreated?.(saved.code).catch((reason) => setError(message(reason))); });
     } catch (reason) {
       phaseRef.current = "open"; setPhase("open"); setError(message(reason));
@@ -284,11 +325,22 @@ function LobbySettingsDialog({ onClose, onCreated, setError, lobby, defaultName 
 }
 
 function LobbyView({ user, lobby, connected, error, setError, onLeave, onProfile }: { user: User; lobby: Lobby; connected: boolean; error: string; setError: (value: string) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void }) {
+  const { play: playAudio } = useAudio();
   const [editing, setEditing] = useState(false);
   const self = lobby.players.find((player) => player.user.id === user.id); const isHost = lobby.host.id === user.id;
   const allReady = lobby.players.length >= 2 && lobby.players.every((player) => player.ready);
   const emptySeats = Array.from({ length: Math.max(0, lobby.settings.maxPlayers - lobby.players.length) });
-  const action = async (path: string) => { setError(""); try { await api(`/lobbies/${lobby.code}/${path}`, { method: "POST", body: "{}" }); } catch (reason) { setError(message(reason)); } };
+  const previousMembers = useRef(lobby.players);
+  useEffect(() => {
+    const previous = previousMembers.current;
+    for (const player of lobby.players) {
+      const before = previous.find((entry) => entry.user.id === player.user.id);
+      if (!before && player.user.id !== user.id) playAudio("playerJoin");
+      else if (before && before.ready !== player.ready && player.user.id !== user.id) playAudio(player.ready ? "ready" : "unready");
+    }
+    previousMembers.current = lobby.players;
+  }, [lobby.players, playAudio, user.id]);
+  const action = async (path: string) => { setError(""); try { await api(`/lobbies/${lobby.code}/${path}`, { method: "POST", body: "{}" }); playAudio(path === "ready" ? "ready" : "unready"); } catch (reason) { setError(message(reason)); } };
   return <main className="portrait-view lobby-view"><Orientation portrait /><header className="app-header"><button className="logout-button" aria-label="Lobby verlassen" onClick={() => void onLeave()}>⇥</button><div className="brand-suits" aria-label="Escalera"><span className="brand-suit">♠</span><h1 className="brand brand-small">Escalera</h1><span className="brand-suit suit-red">♥</span></div><button className="profile-button" aria-label="Profil öffnen" onClick={() => onProfile(user.id)}><Avatar user={user} /></button></header><section className="lobby-layout"><h2 className="lobby-name">{lobby.name}</h2><div className="lobby-settings-row"><section className="setting-badges"><span className="badge">{lobby.settings.maxPlayers} Spieler</span><span className="badge">{lobby.settings.jokersPerPlayer} Joker</span><span className="badge">{lobby.settings.maxTurnSeconds ?? "∞"} Sek.</span><span className="badge">Straße {lobby.settings.streetsRequireSameSuit ? "mit Zeichen" : "frei"}</span></section>{isHost && <button className="button-icon lobby-settings-button" aria-label="Lobby-Einstellungen" onClick={() => setEditing(true)}>⚙</button>}</div><section className="surface members-panel"><div className="list-title lobby-player-title"><h2>Spieler</h2><span>{lobby.players.length}/{lobby.settings.maxPlayers}</span></div><div className={`member-list ${allReady ? "all-ready" : ""}`}>{lobby.players.map((player) => <article className={`member-card ${player.ready ? "is-ready" : "is-waiting"} ${player.connected ? "" : "is-offline"}`} key={player.user.id}><Avatar user={player.user} onClick={() => onProfile(player.user.id)} /><div><strong>{player.user.username}</strong><span>{player.user.id === lobby.host.id ? "♛ Gastgeber" : "Spieler"} · {player.connected ? "Online" : "Offline"}</span></div><span className="member-state">{player.ready ? "✓ Bereit" : "○ Wartet"}</span></article>)}{emptySeats.map((_, index) => <article className="member-card member-slot-empty" aria-label="Freier Spielerplatz" key={`empty-${index}`}><span className="empty-seat-icon">+</span><strong>Freier Platz</strong><span>Wartet auf Spieler</span></article>)}</div></section>{error && <p className="error">{error}</p>}<footer className="lobby-actions"><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer></section>{editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}</main>;
 }
 
@@ -315,6 +367,7 @@ const DEAL_STEP = GAME_START_TIMING_MS.dealStep;    // ms between two consecutiv
 const DEAL_FLIGHT = GAME_START_TIMING_MS.dealFlight; // ms a dealt card travels to its owner
 
 function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void; onTutorial: () => void }) {
+  const { play: playAudio, setScene: setAudioScene } = useAudio();
   const [menu, setMenu] = useState(false); const [scoreboard, setScoreboard] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
   const [selected, setSelected] = useState<string[]>([]); const [busy, setBusy] = useState(false); const [actionError, setActionError] = useState("");
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
@@ -324,6 +377,31 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
   const anchors = useRef(new Map<string, HTMLElement>());
   const anchor = useCallback((key: string) => (el: HTMLElement | null) => { if (el) anchors.current.set(key, el); else anchors.current.delete(key); }, []);
   const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    setAudioScene(game.state.status === "FINISHED" ? "results" : "game");
+    return () => setAudioScene("game");
+  }, [game.state.status, setAudioScene]);
+  const previousActivePlayer = useRef(game.state.activePlayerId);
+  useEffect(() => {
+    if (previousActivePlayer.current !== game.state.activePlayerId) {
+      playAudio("turn", { dedupeKey: `${game.version}-${game.state.activePlayerId}`, intensity: game.state.activePlayerId === user.id ? 1 : .62 });
+      previousActivePlayer.current = game.state.activePlayerId;
+    }
+  }, [game.state.activePlayerId, game.version, playAudio, user.id]);
+  const resultSounds = useRef(new Set<string>());
+  useEffect(() => {
+    const result = game.state.lastRoundResult;
+    if (!result) return;
+    const key = `round-${result.round}`;
+    if (resultSounds.current.has(key)) return;
+    resultSounds.current.add(key);
+    playAudio(result.endedById === user.id ? "roundWin" : "roundLose", { dedupeKey: `${lobby.code}-${key}` });
+  }, [game.state.lastRoundResult, lobby.code, playAudio, user.id]);
+  useEffect(() => {
+    if (game.state.status !== "FINISHED") return;
+    const placement = game.state.placements.find((entry) => entry.userId === user.id)?.rank;
+    playAudio(placement === 1 ? "gameWin" : "gameLose", { dedupeKey: `${lobby.code}-final` });
+  }, [game.state.placements, game.state.status, lobby.code, playAudio, user.id]);
 
   const initialDealKey = game.state.status === "ACTIVE" && game.state.round === 1 && game.state.ownHand.length >= INITIAL_HAND_SIZE ? `escalera-deal-${lobby.code}-${game.state.round}` : null;
   const initialTurnOpensAt = game.state.turn.opensAt ? Date.parse(game.state.turn.opensAt) : Number.NaN;
@@ -509,14 +587,15 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     setDiscardHold({ top: null, count: 0 });
     setDrawHold(snapshot.state.drawPileCount + total + 1);
     const start = introHoldRef.current ? Math.max(0, MATCH_INTRO_MS - 600) : 250;
-    schedule(start, () => { setDealRect(rectOf("draw")); setDealStage("drop"); });
-    schedule(start + DEAL_TIMING.drop, () => setDealStage("shuffle"));
+    schedule(start, () => { setDealRect(rectOf("draw")); setDealStage("drop"); playAudio("deckDrop", { dedupeKey: `${dealKey}-drop` }); });
+    schedule(start + DEAL_TIMING.drop, () => { setDealStage("shuffle"); playAudio("shuffle", { dedupeKey: `${dealKey}-shuffle` }); });
     const dealFrom = start + DEAL_TIMING.drop + DEAL_TIMING.shuffle;
     for (let index = 0; index < total; index += 1) {
       const playerId = order[index % order.length];
       const cardIndex = Math.floor(index / order.length);
       schedule(dealFrom + index * DEAL_STEP, () => {
         if (index === 0) setDealStage(null);
+        playAudio("deal", { variant: index, intensity: index % order.length === 0 ? .72 : .48 });
         const from = rectOf("draw"); if (!from) return;
         setDrawHold((current) => (current === null ? null : current - 1));
         if (playerId === user.id) {
@@ -533,6 +612,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     schedule(dealEnd + 150, () => {
       const from = rectOf("draw"); const to = rectOf("discard"); const top = initialDiscard;
       setDrawHold(null);
+      playAudio("flip", { dedupeKey: `${dealKey}-first-discard` });
       if (from && to && top) pushFlight({ key: "deal-first-discard", from, to, face: cardAsset(top), showBack: true, flip: { start: .3, end: .8 }, fromTilt: BOARD_TILT, toTilt: BOARD_TILT, duration: 560, onArrive: () => setDiscardHold(null) });
       else setDiscardHold(null);
     });
@@ -541,7 +621,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
       timers.current.forEach((timer) => window.clearTimeout(timer)); timers.current = [];
       if (!dealSettled.current) { try { sessionStorage.removeItem(dealKey); } catch { /* no storage access */ } setDealing(false); setDealStage(null); setDealtIds(null); setCountHold({}); setDiscardHold(null); setDrawHold(null); }
     };
-  }, [dealKey, reduced]);
+  }, [dealKey, playAudio, reduced]);
 
   // Action-driven animations, keyed by commandId, so a replayed realtime event
   // or a reconnect re-render never animates the same action twice. The first
@@ -556,6 +636,11 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     if (!primed.current) { primed.current = true; return; }
     if (!fresh.length) return;
     setEvents((current) => [...current, ...fresh.map((action) => ({ key: action.commandId, text: actionText(action, lobby, user.id) }))].slice(-3));
+    for (const action of fresh) {
+      const merged = action.type === "meld" && game.state.melds.length === previous.state.melds.length;
+      const cue = audioCueForGameAction(action.type, merged);
+      if (cue) playAudio(cue, { dedupeKey: action.commandId, intensity: action.userId === user.id ? 1 : .78 });
+    }
     // Only adjacent versions have an unambiguous before/after snapshot. On a
     // reconnect or missed packet we deliberately fast-forward to the server
     // truth instead of inventing a flight from an aggregate diff. A round
@@ -671,18 +756,18 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
         });
       }
     }
-  }, [game.version]);
+  }, [game.version, playAudio]);
   useEffect(() => { if (!events.length) return; const timer = window.setTimeout(() => setEvents((current) => current.slice(1)), 2600); return () => window.clearTimeout(timer); }, [events]);
 
   const act = async (path: string, body?: object) => {
     if (visualBusy) return;
     setBusy(true); setActionError("");
     try { const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) }); onGame(result); setSelected([]); }
-    catch (reason) { if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game); setActionError(message(reason)); }
+    catch (reason) { if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game); setActionError(message(reason)); playAudio("error"); }
     finally { setBusy(false); }
   };
   const toggleCard = (cardId: string) => setSelected((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
-  const laySelected = () => { try { if (self.phaseLaid) void act("melds", { cardIds: selected }); else void act("phase", { combinations: phaseGroups(selectedCards, game.state.phase).map((group) => group.map((card) => card.id)) }); } catch (reason) { setActionError(message(reason)); } };
+  const laySelected = () => { try { if (self.phaseLaid) void act("melds", { cardIds: selected }); else void act("phase", { combinations: phaseGroups(selectedCards, game.state.phase).map((group) => group.map((card) => card.id)) }); } catch (reason) { setActionError(message(reason)); playAudio("dropInvalid"); } };
   const runZone = (zone: string, cardId?: string) => {
     const card = cardId ?? selected[0];
     if (zone === "draw" && canDraw) return void act("draw", { source: "draw" });
@@ -691,6 +776,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     if (zone === "meldzone" && canLay) return laySelected();
     if (zone.startsWith("meld:") && openMelds.includes(zone.slice(5)) && card) return void act(`melds/${zone.slice(5)}/cards`, { cardId: card });
     setActionError("Diese Karte passt hier nicht.");
+    playAudio("dropInvalid");
   };
 
   // Pointer events rather than HTML5 drag-and-drop: the native API emits nothing
@@ -703,7 +789,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
       // Only start dragging (and apply the dragged style) past a ~10px threshold,
       // so a small jitter on click never reads as a drag.
       if (!live && Math.hypot(moveEvent.clientX - originX, moveEvent.clientY - originY) < 10) return;
-      if (!live) { live = true; setSelected((current) => current.includes(card.id) ? current : [card.id]); }
+      if (!live) { live = true; setSelected((current) => current.includes(card.id) ? current : [card.id]); playAudio("dragStart"); }
       const zone = zoneAt(moveEvent.clientX, moveEvent.clientY);
       setDrag({ cardId: card.id, x: moveEvent.clientX, y: moveEvent.clientY, zone });
     };
@@ -712,7 +798,8 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
       setDrag(null);
       if (!live) return;
       const zone = zoneAt(upEvent.clientX, upEvent.clientY);
-      if (zone) runZone(zone, card.id);
+      if (zone) { if (targets.has(zone)) playAudio("dropValid"); runZone(zone, card.id); }
+      else playAudio("dropInvalid");
     };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish);
   };
@@ -791,16 +878,21 @@ function FinalResultOverlay({ placements, lobby, onLeave }: { placements: FinalP
 function playerName(lobby: Lobby, userId: string) { return lobby.players.find((entry) => entry.user.id === userId)?.user.username ?? "Spieler"; }
 
 function TurnCountdown({ opensAt, deadlineAt, finished }: { opensAt: string | null; deadlineAt: string | null; finished: boolean }) {
+  const { play: playAudio } = useAudio();
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 250); return () => window.clearInterval(timer); }, []);
-  if (finished) return null;
   const preparing = opensAt ? Math.max(0, Math.ceil((Date.parse(opensAt) - now) / 1000)) : 0;
+  const remaining = !finished && preparing === 0 && deadlineAt ? Math.max(0, Math.ceil((Date.parse(deadlineAt) - now) / 1000)) : null;
+  useEffect(() => {
+    if (remaining === 10 || (remaining !== null && remaining <= 5 && remaining > 0)) playAudio("warning", { dedupeKey: `${deadlineAt}-${remaining}`, intensity: remaining === 10 ? .82 : .55 });
+  }, [deadlineAt, playAudio, remaining]);
+  if (finished) return null;
   if (preparing > 0) return <span className="turn-countdown" aria-label={`Spielstart in ${preparing} Sekunden`}>…</span>;
-  const remaining = deadlineAt ? Math.max(0, Math.ceil((Date.parse(deadlineAt) - now) / 1000)) : null;
   return <span className={`turn-countdown ${remaining !== null && remaining <= 10 ? "is-urgent" : ""}`} aria-label={remaining === null ? "Keine Zugbegrenzung" : `${remaining} Sekunden verbleibend`}>{remaining === null ? "∞" : `${remaining}s`}</span>;
 }
 
 function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer: User; userId: string; onUser: (user: User) => void; onTutorial: () => void; onClose: () => void }) {
+  const { preferences, setPreferences, play: playAudio } = useAudio();
   const [file, setFile] = useState<File | null>(null);
   const [avatarActions, setAvatarActions] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -808,30 +900,89 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
   const [error, setError] = useState("");
   const [profile, setProfile] = useState<ProfileStatistics | null>(null);
   const [treeOpen, setTreeOpen] = useState(false);
-  useEffect(() => { api<ProfileStatistics>(`/profile/users/${userId}`).then(setProfile).catch((reason) => setError(message(reason))); }, [userId]);
+  const [audioStatus, setAudioStatus] = useState("Gespeichert");
+  const saveAudioTimer = useRef<number | null>(null);
+  const pendingAudio = useRef(preferences);
+  const audioDirty = useRef(false);
+  useEffect(() => { pendingAudio.current = preferences; }, [preferences]);
+  useEffect(() => { api<ProfileStatistics>(`/profile/users/${userId}`).then(setProfile).catch((reason) => { setError(message(reason)); playAudio("error"); }); }, [playAudio, userId]);
+  useEffect(() => () => {
+    if (saveAudioTimer.current !== null) window.clearTimeout(saveAudioTimer.current);
+    if (!audioDirty.current) return;
+    void fetch(`${API_URL}/profile/audio`, {
+      method: "PUT",
+      credentials: "include",
+      keepalive: true,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(pendingAudio.current)
+    });
+  }, []);
   useEffect(() => {
     if (!file) { setPreview(null); return; }
     const url = URL.createObjectURL(file);
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  const upload = async (file: File) => {
+  const upload = async (selectedFile: File) => {
     setBusy(true); setError("");
     try {
-      const body = new FormData(); body.append("file", file);
+      const body = new FormData(); body.append("file", selectedFile);
       const updated = (await api<{ user: User }>("/profile/avatar", { method: "POST", body })).user;
-      onUser(updated); setProfile((current) => current ? { ...current, user: updated } : current); setAvatarActions(false);
-    } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
+      onUser(updated); setProfile((current) => current ? { ...current, user: updated } : current); setAvatarActions(false); playAudio("success");
+    } catch (reason) { setError(message(reason)); playAudio("error"); } finally { setBusy(false); }
   };
   const remove = async () => {
     setBusy(true); setError("");
-    try { const updated = (await api<{ user: User }>("/profile/avatar", { method: "DELETE" })).user; onUser(updated); setProfile((current) => current ? { ...current, user: updated } : current); setAvatarActions(false); }
-    catch (reason) { setError(message(reason)); } finally { setBusy(false); }
+    try { const updated = (await api<{ user: User }>("/profile/avatar", { method: "DELETE" })).user; onUser(updated); setProfile((current) => current ? { ...current, user: updated } : current); setAvatarActions(false); playAudio("success"); }
+    catch (reason) { setError(message(reason)); playAudio("error"); } finally { setBusy(false); }
+  };
+  const queueAudioSave = (next: AudioPreferences) => {
+    pendingAudio.current = next;
+    audioDirty.current = true;
+    setPreferences(next);
+    setAudioStatus("Speichert …");
+    if (saveAudioTimer.current !== null) window.clearTimeout(saveAudioTimer.current);
+    saveAudioTimer.current = window.setTimeout(async () => {
+      const submitted = pendingAudio.current;
+      try {
+        const saved = await api<AudioPreferences>("/profile/audio", { method: "PUT", body: JSON.stringify(submitted) });
+        if (pendingAudio.current === submitted) {
+          audioDirty.current = false;
+          setPreferences(saved);
+          setAudioStatus("Gespeichert");
+        }
+      } catch (reason) { setAudioStatus("Nicht gespeichert"); setError(message(reason)); playAudio("error"); }
+    }, 320);
+  };
+  const setAudioLevel = (key: "master" | "music" | "ui" | "game", value: number) => queueAudioSave({ ...pendingAudio.current, [key]: value });
+  const toggleMute = () => {
+    const next = { ...pendingAudio.current, muted: !pendingAudio.current.muted };
+    queueAudioSave(next);
+    if (preferences.muted) window.setTimeout(() => playAudio("success", { intensity: .55 }), 30);
   };
   const displayed = profile?.user ?? (viewer.id === userId ? viewer : { id: userId, username: "Spieler", avatarKey: null });
   const editable = viewer.id === userId;
   const avatar = preview ? <img src={preview} alt="Neue Profilbild-Vorschau" /> : <Avatar user={displayed} large />;
-  return <div className="dialog-backdrop"><section className="surface dialog profile-dialog"><div className="dialog-title"><div><p className="overline">{editable ? "Dein Konto" : "Spielerprofil"}</p><h2>Profil</h2></div><button className="button-icon" onClick={onClose} aria-label="Schließen">×</button></div><div className="profile-summary"><div className="profile-preview">{avatar}{editable && <><button className="avatar-edit-button" aria-label="Profilbild bearbeiten" onClick={() => setAvatarActions((open) => !open)}>✎</button>{avatarActions && <div className="avatar-actions"><label className="button button-primary">Hochladen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const selected = event.target.files?.[0]; if (selected) { setFile(selected); void upload(selected); } }} /></label><button disabled={!displayed.avatarKey || busy} className="button-danger" onClick={() => void remove()}>Löschen</button></div>}</>}</div><div><strong className="profile-name">{displayed.username}</strong>{profile && <div className="stat-grid"><span><b>{profile.statistics.gamesPlayed}</b> Spiele</span><span><b>{profile.statistics.gamesWon}</b> Siege</span><span><b>{profile.statistics.totalPenalty}</b> Strafpunkte</span><span><b>{profile.statistics.cardsBought}</b> Käufe</span></div>}</div></div>{profile && <button className="button achievements-open" onClick={() => setTreeOpen(true)}><span aria-hidden="true">✦</span> Erfolgsbaum ansehen<small>{profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlocked).length} / {profile.tree.flatMap((branch) => branch.nodes).length} freigeschaltet</small></button>}{error && <p className="error" role="alert">{error}</p>}</section>{treeOpen && profile && <AchievementTreeOverlay tree={profile.tree} username={displayed.username} onClose={() => setTreeOpen(false)} />}</div>;
+  const audioLevels: Array<{ key: "master" | "music" | "ui" | "game"; label: string }> = [
+    { key: "master", label: "Gesamt" }, { key: "music", label: "Musik" }, { key: "ui", label: "UI" }, { key: "game", label: "Spiel" }
+  ];
+  return <div className="dialog-backdrop">
+    <section className="surface dialog profile-dialog">
+      <div className="dialog-title"><div><p className="overline">{editable ? "Dein Konto" : "Spielerprofil"}</p><h2>Profil</h2></div><button className="button-icon" data-audio="close" onClick={onClose} aria-label="Schließen">×</button></div>
+      <div className="profile-summary">
+        <div className="profile-preview">{avatar}{editable && <><button className="avatar-edit-button" data-audio="open" aria-label="Profilbild bearbeiten" onClick={() => setAvatarActions((open) => !open)}>✎</button>{avatarActions && <div className="avatar-actions"><label className="button button-primary">Hochladen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const selected = event.target.files?.[0]; if (selected) { setFile(selected); void upload(selected); } }} /></label><button disabled={!displayed.avatarKey || busy} className="button-danger" onClick={() => void remove()}>Löschen</button></div>}</>}</div>
+        <div><strong className="profile-name">{displayed.username}</strong>{profile && <div className="stat-grid"><span><b>{profile.statistics.gamesPlayed}</b> Spiele</span><span><b>{profile.statistics.gamesWon}</b> Siege</span><span><b>{profile.statistics.totalPenalty}</b> Strafpunkte</span><span><b>{profile.statistics.cardsBought}</b> Käufe</span></div>}</div>
+      </div>
+      {editable && <section className={`profile-audio ${preferences.muted ? "is-muted" : ""}`} aria-labelledby="audio-settings-title">
+        <div className="profile-audio-title"><div><p className="overline">Sound & Musik</p><h3 id="audio-settings-title">Audio-Mix</h3></div><button type="button" className={`audio-mute ${preferences.muted ? "is-active" : ""}`} data-audio="silent" aria-pressed={preferences.muted} onClick={toggleMute}>{preferences.muted ? "Ton einschalten" : "Stummschalten"}</button></div>
+        <div className="audio-levels">{audioLevels.map(({ key, label }) => <label className="audio-level" key={key}><span>{label}<output>{preferences[key]}%</output></span><input data-audio="silent" type="range" min="0" max="100" step="1" value={preferences[key]} onInput={(event) => setAudioLevel(key, Number(event.currentTarget.value))} aria-label={`${label}-Lautstärke`} /></label>)}</div>
+        <p className="audio-status" aria-live="polite"><span className="audio-pulse" aria-hidden="true" />{audioStatus}</p>
+      </section>}
+      {profile && <div className="profile-actions"><button className="button achievements-open" data-audio="open" onClick={() => setTreeOpen(true)}><span aria-hidden="true">✦</span> Erfolgsbaum ansehen<small>{profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlocked).length} / {profile.tree.flatMap((branch) => branch.nodes).length} freigeschaltet</small></button>{editable && <button className="button" data-audio="open" onClick={onTutorial}>Kurzanleitung</button>}</div>}
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
+    {treeOpen && profile && <AchievementTreeOverlay tree={profile.tree} username={displayed.username} onClose={() => setTreeOpen(false)} />}
+  </div>;
 }
 
 function abbreviateThreshold(value: number) { return value >= 1000 ? `${value % 1000 === 0 ? value / 1000 : (value / 1000).toFixed(1)}k` : String(value); }
@@ -972,6 +1123,7 @@ const TUTORIAL_STEPS = [
 ];
 
 function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: (user: User) => void; onClose: () => void }) {
+  const { play: playAudio } = useAudio();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -979,8 +1131,9 @@ function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: (user: 
     setBusy(true); setError("");
     try {
       if (!user.tutorialCompleted) onUser((await api<{ user: User }>("/profile/tutorial/complete", { method: "POST", body: "{}" })).user);
+      playAudio("success");
       onClose();
-    } catch (reason) { setError(message(reason)); } finally { setBusy(false); }
+    } catch (reason) { setError(message(reason)); playAudio("error"); } finally { setBusy(false); }
   };
   const current = TUTORIAL_STEPS[step];
   return <div className="dialog-backdrop tutorial-backdrop"><section className="surface dialog tutorial-dialog"><p className="overline">Kurzanleitung · {step + 1}/{TUTORIAL_STEPS.length}</p><div className="tutorial-suits" aria-hidden="true">♠ <span>♥</span> ♣ <span>♦</span></div><h2>{current.title}</h2><p>{current.text}</p><div className="tutorial-progress">{TUTORIAL_STEPS.map((_, index) => <span className={index === step ? "is-current" : ""} key={index} />)}</div>{error && <p className="error" role="alert">{error}</p>}<div className="tutorial-actions"><button className="button-quiet" disabled={busy} onClick={() => void finish()}>Überspringen</button>{step > 0 && <button disabled={busy} onClick={() => setStep(step - 1)}>Zurück</button>}<button className="button-primary" disabled={busy} onClick={() => step === TUTORIAL_STEPS.length - 1 ? void finish() : setStep(step + 1)}>{step === TUTORIAL_STEPS.length - 1 ? "Losspielen" : "Einloggen"}</button></div></section></div>;

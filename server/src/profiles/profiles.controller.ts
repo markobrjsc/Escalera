@@ -1,8 +1,9 @@
-import { Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { AuthenticatedRequest, SessionGuard } from "../auth/session.guard.js";
 import { ProfilesService } from "./profiles.service.js";
 import { StatisticsService } from "./statistics.service.js";
+import { AudioPreferencesDto } from "./audio-preferences.dto.js";
 
 @Controller("profile")
 @UseGuards(SessionGuard)
@@ -17,6 +18,16 @@ export class ProfilesController {
   @Get("statistics")
   getStatistics(@Req() request: AuthenticatedRequest) {
     return this.statistics.profile(request.user.id);
+  }
+
+  @Get("audio")
+  getAudioPreferences(@Req() request: AuthenticatedRequest) {
+    return this.profiles.getAudioPreferences(request.user.id);
+  }
+
+  @Put("audio")
+  updateAudioPreferences(@Req() request: AuthenticatedRequest, @Body() input: AudioPreferencesDto) {
+    return this.profiles.updateAudioPreferences(request.user.id, input);
   }
 
   @Get("users/:userId")

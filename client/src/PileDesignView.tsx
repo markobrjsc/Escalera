@@ -3,6 +3,7 @@ import type { Card } from "@escalera/game-rules";
 import { CARD_BACK, PileStack } from "./cards.js";
 import { BOARD_TILT, DealStage, DEAL_TIMING, FlightLayer, usePrefersReducedMotion } from "./fx.js";
 import type { FlightSpec, Rect } from "./fx.js";
+import { useAudio } from "./audio.js";
 
 /* Design-Route (#51): erreichbar über /design/piles oder #/design/piles, ohne
    Login. Ein Feld mit exakt den Klassen und der 3D-Neigung des echten
@@ -23,6 +24,7 @@ const DEMO_TOPS: Card[] = [
 ] as Card[];
 
 export function PileDesignView() {
+  const { play: playAudio, setScene: setAudioScene } = useAudio();
   const [drawCount, setDrawCount] = useState(86);
   const [discardCount, setDiscardCount] = useState(7);
   const [stage, setStage] = useState<"drop" | "shuffle" | null>(null);
@@ -35,6 +37,8 @@ export function PileDesignView() {
   const reduced = usePrefersReducedMotion();
   const top = discardCount > 0 ? DEMO_TOPS[(discardCount - 1) % DEMO_TOPS.length] : null;
   const previewing = !!stage || staticCue || flights.length > 0;
+
+  useEffect(() => { setAudioScene("game"); return () => setAudioScene("silent"); }, [setAudioScene]);
 
   useEffect(() => () => {
     timers.current.forEach((timer) => window.clearTimeout(timer));
@@ -57,6 +61,7 @@ export function PileDesignView() {
   const playIntro = () => {
     if (previewing) return;
     if (reduced) {
+      playAudio("shuffle");
       setStaticCue(true);
       schedule(() => setStaticCue(false), 1100);
       return;
@@ -64,7 +69,8 @@ export function PileDesignView() {
     const box = drawPile.current?.getBoundingClientRect(); if (!box) return;
     setStageRect({ left: box.left, top: box.top, width: box.width, height: box.height });
     setStage("drop");
-    schedule(() => setStage("shuffle"), DEAL_TIMING.drop);
+    playAudio("deckDrop");
+    schedule(() => { setStage("shuffle"); playAudio("shuffle"); }, DEAL_TIMING.drop);
     schedule(() => setStage(null), DEAL_TIMING.drop + DEAL_TIMING.shuffle);
   };
 
@@ -73,6 +79,7 @@ export function PileDesignView() {
     const source = drawPile.current?.getBoundingClientRect();
     const target = discardPile.current?.getBoundingClientRect();
     if (!source || !target) return;
+    playAudio("deal");
     setFlights([{ key: `pile-flight-${Date.now()}`, from: source, to: target, face: CARD_BACK, showBack: true, fromTilt: BOARD_TILT, toTilt: BOARD_TILT, duration: 1400, via: { dx: 0, dy: -90 } }]);
   };
 
