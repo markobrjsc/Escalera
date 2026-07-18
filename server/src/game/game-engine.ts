@@ -216,7 +216,7 @@ export function buyDiscard(rawState: GameState, userId: string) {
   if (state.status === "FINISHED") throw new GameActionError("Die Partie ist bereits beendet.");
   if (state.roundEndedById) throw new GameActionError("Die Runde ist bereits beendet.");
   if (!state.discardOffer) throw new GameActionError("Diese Karte steht nicht mehr zum Kauf.");
-  if (userId === state.activePlayerId || userId === state.discardOffer.offeredById) throw new GameActionError("Du kannst diese Karte gerade nicht kaufen.");
+  if (userId === state.activePlayerId) throw new GameActionError("Der aktive Spieler zieht die Karte regulär statt sie zu kaufen.");
   const buyer = player(state, userId);
   if (buyer.coins < 1) throw new GameActionError("Du hast keine Münze mehr.");
   const card = state.discardPile.at(-1);

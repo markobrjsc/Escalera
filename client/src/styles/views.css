@@ -223,6 +223,7 @@
 .pile-empty { display: grid; place-items: center; width: 100%; height: 100%; border: var(--hair) dashed var(--color-muted); border-radius: inherit; color: var(--color-muted); }
 .pile-station b { color: var(--color-white); font-size: var(--t-sm); }
 .buy-button { min-width: 0; min-height: var(--ctrl); border: var(--hair) solid var(--color-teal); border-radius: var(--radius-sm); padding-inline: calc(.7 * var(--u)); color: var(--color-teal); font-size: var(--t-xs); white-space: nowrap; }
+.buy-button.is-available { border-color: var(--color-waiting); background: #6b583633; color: var(--color-waiting); box-shadow: 0 0 calc(.7 * var(--u)) #d8be6a44; }
 
 /* The meld zone is a plain area: only the cards themselves carry any chrome. */
 .meld-zone { display: grid; height: 100%; min-height: 0; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(38 * var(--u))), 1fr)); grid-auto-rows: calc(15 * var(--u)); align-content: start; gap: var(--gap); overflow-y: auto; overscroll-behavior: contain; border: var(--hair) dashed #52796f55; border-radius: var(--radius-sm); padding: var(--gap); background: transparent; scrollbar-width: none; }

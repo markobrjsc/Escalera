@@ -74,7 +74,7 @@ export function App() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [lobbyRevision, setLobbyRevision] = useState(0);
   const [unlocks, setUnlocks] = useState<AchievementNode[]>([]);
-  const achievementsSeen = useRef<string | null>(null);
+  const achievementsSeen = useRef(new Set<string>());
   const lobbyScope = useRef<string | null>(null);
   const acceptedGame = useRef<{ code: string; version: number } | null>(null);
 
@@ -104,20 +104,18 @@ export function App() {
     setGame(next);
   }, []);
 
-  // The server writes unlocks both at game end and the moment a round is won, so
-  // we refetch our own tree on either event and toast anything freshly unlocked.
+  // Every accepted game version can advance an achievement. Announce each
+  // freshly unlocked node once, including purchases, moves and streets.
   useEffect(() => {
     if (!user || !lobby || !game) return;
-    const finished = game.state.status === "FINISHED";
-    const round = game.state.lastRoundResult?.round;
-    if (!finished && round === undefined) return;
-    const marker = `${lobby.code}-${finished ? "final" : `round-${round}`}`;
-    if (achievementsSeen.current === marker) return;
-    achievementsSeen.current = marker;
     api<ProfileStatistics>(`/profile/users/${user.id}`)
-      .then((profile) => setUnlocks(profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlockedAt !== null && Date.now() - Date.parse(node.unlockedAt) < 30_000)))
+      .then((profile) => {
+        const fresh = profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlockedAt !== null && Date.now() - Date.parse(node.unlockedAt) < 30_000 && !achievementsSeen.current.has(node.id));
+        fresh.forEach((node) => achievementsSeen.current.add(node.id));
+        if (fresh.length) setUnlocks((current) => [...current.filter((node) => !fresh.some((next) => next.id === node.id)), ...fresh]);
+      })
       .catch(() => undefined);
-  }, [game?.state.status, game?.state.lastRoundResult?.round, lobby?.code, user?.id]);
+  }, [game?.version, lobby?.code, user?.id]);
 
   useEffect(() => {
     api<{ user: User }>("/auth/me").then(async (result) => {
@@ -398,6 +396,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
   const visualBusy = introHold || dealing || flights.length > 0 || Object.keys(arrivals).length > 0;
   const canDraw = mayAct && !game.state.turn.hasDrawn && !busy && !visualBusy;
   const canPlay = mayAct && game.state.turn.hasDrawn && !busy && !visualBusy;
+  const canBuy = Boolean(game.state.discardOffer?.available) && self.coins >= 1 && !busy && !visualBusy;
   const selectedCards = useMemo(() => hand.filter((card) => selected.includes(card.id)), [hand, selected]);
   const canDiscard = canPlay && selected.length === 1;
   // Only offer the meld zone when the selection would actually pass validation.
@@ -742,7 +741,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
       <div className="pile-station">
         <div className={`pile-slot ${zoneClass("discard")}`}><button ref={anchor("discard")} className="game-pile discard-pile" data-zone="discard" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : shownDiscard.top ? `${cardLabel(shownDiscard.top)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}><PileStack count={shownDiscard.count} top={shownDiscard.top} kind="discard" /></button></div>
         <span>Ablage <b>[ {shownDiscard.count} ]</b></span>
-        {game.state.discardOffer && <button className="buy-button" disabled={busy || visualBusy} onClick={() => void act("buy")}>Kaufen · 1 Münze</button>}
+        {game.state.discardOffer?.available && <button className="buy-button is-available" disabled={!canBuy} onClick={() => void act("buy")}>Ablage kaufen · 1 Münze</button>}
       </div>
     </section>
     <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{shownHand.map((card, index) => <button type="button" data-fx-card={card.id} onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""} ${arrivals[card.id] ? "is-incoming" : ""}`} style={{ "--card-count": shownHand.length, "--card-index": index } as React.CSSProperties} key={card.id}><span className="card-3d"><CardFace card={card} /></span></button>)}</div></section>

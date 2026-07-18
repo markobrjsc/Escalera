@@ -42,6 +42,14 @@ describe("autoritärer Spielzustand", () => {
     expect(JSON.stringify(view)).not.toContain('"hand"');
   });
 
+  it("zeigt das Kaufangebot jedem wartenden Spieler bis zum gegnerischen Draw", () => {
+    const state = createInitialGameState(["a", "b"], 1, () => 0);
+    state.activePlayerId = "b";
+    state.discardOffer = { cardId: state.discardPile[0].id, offeredById: "a" };
+    expect(toPlayerGameView(state, "a").discardOffer).toEqual({ available: true, cardId: state.discardPile[0].id });
+    expect(toPlayerGameView(state, "b").discardOffer).toBeNull();
+  });
+
   it("projiziert Realtime-Metadaten ohne zusätzliche oder geheime Felder", () => {
     const state = createInitialGameState(["a", "b"], 1, () => 0);
     state.recentActions = [{

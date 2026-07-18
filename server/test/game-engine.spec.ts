@@ -80,10 +80,10 @@ describe("autoritärer Spielzug", () => {
     const discarded = discardCard(drawn, "p1", "7c");
     expect(discarded.activePlayerId).toBe("p2");
     expect(discarded.discardOffer?.cardId).toBe("7c");
-    const bought = buyDiscard(discarded, "p3");
-    expect(bought.players[2].coins).toBe(6);
-    expect(bought.players[2].hand.some((entry) => entry.id === "7c")).toBe(true);
-    expect(() => buyDiscard(bought, "p3")).toThrow("nicht mehr zum Kauf");
+    const bought = buyDiscard(discarded, "p1");
+    expect(bought.players[0].coins).toBe(6);
+    expect(bought.players[0].hand.some((entry) => entry.id === "7c")).toBe(true);
+    expect(() => buyDiscard(bought, "p1")).toThrow("nicht mehr zum Kauf");
   });
 
   it("verändert bei einer ungültigen Aktion nicht den übergebenen Zustand", () => {
