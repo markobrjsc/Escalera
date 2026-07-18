@@ -12,6 +12,7 @@ import { useLobbyVoice } from "./voiceChat.js";
 import { runSingleFlight } from "./singleFlight.js";
 import { requiresLeaveConfirmation } from "./leaveConfirmation.js";
 import { buildScoreboardRows } from "./scoreboard.js";
+import { phaseRequirement } from "./phasePresentation.js";
 
 const API_URL = "/api";
 const SOCKET_URL = window.location.origin;
@@ -403,6 +404,14 @@ type Arrival = { from: Rect; face: string; showBack?: boolean; flip?: { start: n
 
 const DEAL_STEP = GAME_START_TIMING_MS.dealStep;    // ms between two consecutively dealt cards
 const DEAL_FLIGHT = GAME_START_TIMING_MS.dealFlight; // ms a dealt card travels to its owner
+
+function PlayerStatLabels({ coins, cards, penalty }: { coins: number; cards: number; penalty?: number }) {
+  return <span className="player-stat-labels" aria-label={`${coins} Münzen, ${cards} Karten${penalty === undefined ? "" : `, ${penalty} Strafpunkte`}`}>
+    <span className="player-stat"><b>{coins}</b><span aria-hidden="true">◉</span></span>
+    <span className="player-stat"><b>{cards}</b><span aria-hidden="true">▣</span></span>
+    {penalty !== undefined && <span className="player-stat"><b>{penalty}</b><span aria-hidden="true">⚑</span></span>}
+  </span>;
+}
 
 function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void; onTutorial: () => void }) {
   const { play: playAudio, setScene: setAudioScene } = useAudio();
@@ -906,9 +915,9 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
   return <main ref={root} className={`landscape-view game-view ${drag ? "is-dragging" : ""} ${dealStage ? "is-staging" : ""}`} data-version={game.version} {...(introHold ? { inert: true } : {})}>
     <Orientation landscape />
     <header className="game-hud">
-      <section className="turn-order" aria-label="Zugreihenfolge"><span className="hud-kicker">Reihenfolge</span>{turnOrder.map((player, index) => <article className={`turn-order-player ${player.connected ? "" : "is-offline"}`} ref={anchor(`seat:${player.userId}`)} key={player.userId}><span className="turn-position">{index + 1}</span><Avatar user={player.user} onClick={() => onProfile(player.userId)} /><div><strong>{player.user.username}</strong><span>{player.coins} Münzen · {shownCards(player)} Karten</span></div></article>)}</section>
-      <section className={`active-player-hud ${activePlayer?.userId === user.id ? "is-self" : ""}`} ref={anchor(`seat:${activePlayer?.userId}`)}><Avatar user={activePlayer.user} onClick={() => onProfile(activePlayer.userId)} /><div><span className="hud-kicker">{activePlayer.userId === user.id ? "Du bist am Zug" : "Am Zug"}</span><strong>{activePlayer.user.username}</strong><span>{activePlayer.coins} Münzen · {activePlayer.totalPenalty} Punkte · {shownCards(activePlayer)} Karten</span></div><TurnCountdown opensAt={game.state.turn.opensAt} deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /></section>
-      <section className="phase-hud"><span className="hud-kicker">Runde {game.state.round}</span><strong>Phase {game.state.phase} / 7</strong><span>{self.phaseLaid ? "Phase ausgelegt" : "Phase offen"}</span></section>
+      <section className="turn-order" aria-label="Zugreihenfolge"><span className="hud-kicker">Reihenfolge</span>{turnOrder.map((player, index) => <article className={`turn-order-player ${player.connected ? "" : "is-offline"}`} ref={anchor(`seat:${player.userId}`)} key={player.userId}><span className="turn-position">{index + 1}</span><Avatar user={player.user} onClick={() => onProfile(player.userId)} /><div><strong>{player.user.username}</strong><PlayerStatLabels coins={player.coins} cards={shownCards(player)} /></div></article>)}</section>
+      <section className={`active-player-hud ${activePlayer?.userId === user.id ? "is-self" : ""}`} ref={anchor(`seat:${activePlayer?.userId}`)}><Avatar user={activePlayer.user} onClick={() => onProfile(activePlayer.userId)} /><div><span className="hud-kicker">{activePlayer.userId === user.id ? "Du bist am Zug" : "Am Zug"}</span><strong>{activePlayer.user.username}</strong><PlayerStatLabels coins={activePlayer.coins} cards={shownCards(activePlayer)} penalty={activePlayer.totalPenalty} /></div><TurnCountdown opensAt={game.state.turn.opensAt} deadlineAt={game.state.turn.deadlineAt} finished={game.state.status === "FINISHED"} /></section>
+      <section className="phase-hud"><span className="hud-kicker">Runde {game.state.round}</span><strong>Phase {game.state.phase} / 7</strong><span className="phase-requirement">Ablegen: {phaseRequirement(game.state.phase)}</span><span>{self.phaseLaid ? "Phase ausgelegt" : "Phase offen"}</span></section>
     </header>
     <p className="turn-hint" aria-live="polite">{hint}</p>
     {game.state.discardOffer?.available && buyPosition && <button type="button" className="buy-button is-available" style={{ left: buyPosition.left, top: buyPosition.top, width: buyPosition.width }} disabled={!canBuy} aria-busy={pendingAction === "buy"} onPointerUp={buyOnPointerUp} onClick={buyOnClick}>{pendingAction === "buy" ? "Karte wird gekauft …" : "Ablage kaufen · 1 Münze"}</button>}
@@ -1095,22 +1104,24 @@ function tooltipLines(branch: AchievementBranch, node: AchievementNode): { done:
   return { done: `Aktuell: ${branch.value} / ${node.threshold}`, need: `Noch ${node.threshold - branch.value} bis „${node.label}“.` };
 }
 
-// Minecraft-style advancement layout: an empty root on the left, one branch per
-// row flowing rightward, tiles joined by elbow connectors. Positions are pure px;
-// the surrounding PanZoom handles navigation.
+// Achievement paths spread around the root instead of growing only to the right.
+// The surrounding PanZoom keeps the larger map navigable on touch and desktop.
 function AchievementTreeOverlay({ tree, username, onClose }: { tree: AchievementBranch[]; username: string; onClose: () => void }) {
   const [tip, setTip] = useState<Tooltip | null>(null);
-  const tile = 64, colStep = 108, rowStep = 96, padX = 90, padY = 70;
-  const rootRow = (tree.length - 1) / 2;
-  const colX = (col: number) => padX + col * colStep;
-  const rowY = (row: number) => padY + row * rowStep;
-  const rootX = colX(0), rootY = rowY(rootRow);
+  const tile = 64, branchStep = 112, pad = 130;
   const maxNodes = Math.max(...tree.map((branch) => branch.nodes.length));
-  const width = colX(maxNodes) + padX;
-  const height = rowY(tree.length - 1) + padY + tile;
+  const radius = maxNodes * branchStep + pad;
+  const width = radius * 2, height = radius * 2;
+  const rootX = radius, rootY = radius;
   const recent = (at: string | null) => at !== null && Date.now() - Date.parse(at) < 30_000;
 
-  const placements: NodePlacement[] = tree.flatMap((branch, row) => branch.nodes.map((node, index) => ({ branch, node, index, x: colX(index + 1), y: rowY(row) })));
+  const placements: NodePlacement[] = tree.flatMap((branch, branchIndex) => {
+    const angle = -Math.PI / 2 + branchIndex * (Math.PI * 2 / tree.length);
+    return branch.nodes.map((node, index) => {
+      const distance = (index + 1) * branchStep;
+      return { branch, node, index, x: rootX + Math.cos(angle) * distance, y: rootY + Math.sin(angle) * distance };
+    });
+  });
   const showTip = (placement: NodePlacement) => (event: React.PointerEvent | React.FocusEvent) => {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     setTip({ node: placement.node, branch: placement.branch, x: rect.left + rect.width / 2, y: rect.top });
@@ -1121,14 +1132,11 @@ function AchievementTreeOverlay({ tree, username, onClose }: { tree: Achievement
     <PanZoom className="tree-canvas-viewport" contentWidth={width} contentHeight={height}>
       <div className="tree-canvas" style={{ width, height }}>
         <svg className="tree-wires" width={width} height={height} aria-hidden="true">
-          {tree.map((branch, row) => {
-            const midX = (rootX + tile / 2 + colX(1) - tile / 2) / 2;
-            return <path className={`tree-wire ${branch.nodes[0]?.unlocked ? "is-live" : ""}`} key={`root-${branch.key}`} d={`M ${rootX + tile / 2} ${rootY} H ${midX} V ${rowY(row)} H ${colX(1) - tile / 2}`} />;
-          })}
-          {placements.filter((placement) => placement.index > 0).map((placement) => <line className={`tree-wire ${placement.node.unlocked ? "is-live" : ""}`} key={`w-${placement.node.id}`} x1={colX(placement.index) + tile / 2} y1={placement.y} x2={placement.x - tile / 2} y2={placement.y} />)}
+          {tree.map((branch) => { const first = placements.find((placement) => placement.branch.key === branch.key && placement.index === 0); return first ? <line className={`tree-wire ${first.node.unlocked ? "is-live" : ""}`} key={`root-${branch.key}`} x1={rootX} y1={rootY} x2={first.x} y2={first.y} /> : null; })}
+          {placements.filter((placement) => placement.index > 0).map((placement) => { const previous = placements.find((candidate) => candidate.branch.key === placement.branch.key && candidate.index === placement.index - 1)!; return <line className={`tree-wire ${placement.node.unlocked ? "is-live" : ""}`} key={`w-${placement.node.id}`} x1={previous.x} y1={previous.y} x2={placement.x} y2={placement.y} />; })}
         </svg>
         <div className="tree-tile is-root" style={{ left: rootX - tile / 2, top: rootY - tile / 2, width: tile, height: tile }} aria-hidden="true"><span>♠</span></div>
-        {tree.map((branch, row) => <span className="tree-row-title" key={`t-${branch.key}`} style={{ left: colX(1) - tile / 2, top: rowY(row) - tile / 2 - 20 }}>{branch.title}</span>)}
+        {tree.map((branch) => { const first = placements.find((placement) => placement.branch.key === branch.key && placement.index === 0); return first ? <span className="tree-row-title" key={`t-${branch.key}`} style={{ left: first.x, top: first.y - tile / 2 - 20 }}>{branch.title}</span> : null; })}
         {placements.map((placement) => {
           const { node, branch } = placement;
           return <button
