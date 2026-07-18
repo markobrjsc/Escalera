@@ -8,6 +8,7 @@ import { PresenceService } from "./presence.service.js";
 import { LobbyLifecycleService } from "../lobbies/lobby-lifecycle.service.js";
 
 type WatchLobbyPayload = { code?: string };
+type VoiceSignalPayload = { code?: string; targetUserId?: string; description?: unknown; candidate?: unknown };
 type RealtimeSocket = Socket & { data: { userId?: string; watchedCodes?: Set<string> } };
 
 @WebSocketGateway({
@@ -56,6 +57,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.data.watchedCodes ??= new Set<string>();
     client.data.watchedCodes.add(code);
     this.presence.connect(code, client.data.userId, client.id);
+    client.emit("voice:participants", { code, userIds: this.presence.connectedUserIds(code).filter((userId) => userId !== client.data.userId) });
+    client.to(this.room(code)).emit("voice:participant-joined", { code, userId: client.data.userId });
     await this.publishLobby(code);
   }
 
@@ -64,6 +67,37 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const code = input?.code?.toUpperCase();
     if (!code || !client.data.userId) return;
     await this.disconnectFromLobby(client, code);
+  }
+
+  @SubscribeMessage("voice:signal")
+  async relayVoiceSignal(@ConnectedSocket() client: RealtimeSocket, @MessageBody() input: VoiceSignalPayload) {
+    const code = input?.code?.toUpperCase();
+    const senderUserId = client.data.userId;
+    const targetUserId = input?.targetUserId;
+    if (!code || !senderUserId || !targetUserId || targetUserId === senderUserId || !client.data.watchedCodes?.has(code)) return;
+    if ((input.description === undefined) === (input.candidate === undefined)) return;
+    const lobby = await this.lobbies.getRealtimeUpdate(code);
+    if (!lobby.playerIds.includes(senderUserId) || !lobby.playerIds.includes(targetUserId)) return;
+    this.server.to(this.playerRoom(code, targetUserId)).emit("voice:signal", {
+      code,
+      senderUserId,
+      ...(input.description !== undefined ? { description: input.description } : { candidate: input.candidate })
+    });
+  }
+
+  async evictPlayer(code: string, userId: string, reason: "kicked") {
+    const normalized = code.toUpperCase();
+    const sockets = await this.server.in(this.playerRoom(normalized, userId)).fetchSockets();
+    for (const socket of sockets) {
+      const data = socket.data as RealtimeSocket["data"];
+      data.watchedCodes?.delete(normalized);
+      this.presence.disconnect(normalized, userId, socket.id);
+      socket.emit("lobby:kicked", { code: normalized, reason });
+      await socket.leave(this.room(normalized));
+      await socket.leave(this.playerRoom(normalized, userId));
+    }
+    this.server.to(this.room(normalized)).emit("voice:participant-left", { code: normalized, userId });
+    try { await this.games.skipDisconnected(normalized, userId); } catch { /* Die Partie kann bereits beendet sein. */ }
   }
 
   async publishLobby(code: string) {
@@ -98,6 +132,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.leave(this.playerRoom(code, userId));
     const fullyDisconnected = this.presence.disconnect(code, userId, client.id);
     if (!fullyDisconnected) return;
+    this.server.to(this.room(code)).emit("voice:participant-left", { code, userId });
     try {
       await this.games.skipDisconnected(code, userId);
       await this.publishLobby(code);

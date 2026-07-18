@@ -7,6 +7,8 @@ import { BOARD_TILT, DealStage, DEAL_TIMING, FlightLayer, MatchStartOverlay, MAT
 import type { FlightSpec, Rect } from "./fx.js";
 import { audioCueForGameAction, audioSceneForView, useAudio } from "./audio.js";
 import type { AudioPreferences } from "./audio.js";
+import { PlayerInteractionCard } from "./PlayerInteractionCard.js";
+import { useLobbyVoice } from "./voiceChat.js";
 
 const API_URL = "/api";
 const SOCKET_URL = window.location.origin;
@@ -74,6 +76,7 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [playerCardUserId, setPlayerCardUserId] = useState<string | null>(null);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [lobbyRevision, setLobbyRevision] = useState(0);
   const [unlocks, setUnlocks] = useState<AchievementNode[]>([]);
@@ -81,6 +84,8 @@ export function App() {
   const lobbyScope = useRef<string | null>(null);
   const acceptedGame = useRef<{ code: string; version: number } | null>(null);
   const connectedOnce = useRef(false);
+  const voiceParticipantIds = useMemo(() => lobby?.players.filter((player) => player.connected && player.user.id !== user?.id).map((player) => player.user.id) ?? [], [lobby?.players, user?.id]);
+  const voice = useLobbyVoice(socket, lobby?.code ?? null, user?.id ?? null, voiceParticipantIds);
 
   // HTTP responses and realtime packets share one monotonic gate. Entering a
   // different lobby deliberately starts a fresh version scope; late results
@@ -146,6 +151,7 @@ export function App() {
     live.on("game:update", (value: { code: string; game: Game }) => acceptGame(value.code, value.game));
     live.on("lobbies:update", () => setLobbyRevision((value) => value + 1));
     live.on("lobby:deleted", (value: { code?: string }) => { if (value.code?.toUpperCase() !== lobbyScope.current) return; setLobby(null); resetLobbyScope(); setError("Die Lobby wurde wegen Inaktivität geschlossen."); });
+    live.on("lobby:kicked", (value: { code?: string }) => { if (value.code?.toUpperCase() !== lobbyScope.current) return; setLobby(null); setPlayerCardUserId(null); resetLobbyScope(); setError("Du wurdest aus der Lobby entfernt."); });
     return () => { live.disconnect(); setSocket(null); setConnected(false); };
   }, [acceptGame, resetLobbyScope, user]);
   useEffect(() => { if (!socket || !lobby?.code) return; socket.emit("lobby:watch", { code: lobby.code }); return () => { socket.emit("lobby:unwatch", { code: lobby.code }); }; }, [socket, lobby?.code]);
@@ -156,6 +162,7 @@ export function App() {
     try {
       await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" });
       setLobby(null);
+      setPlayerCardUserId(null);
       resetLobbyScope();
       playAudio("close");
     } catch (reason) { setError(message(reason)); }
@@ -165,6 +172,7 @@ export function App() {
       await api("/auth/logout", { method: "POST", body: "{}" });
       setUser(null);
       setLobby(null);
+      setPlayerCardUserId(null);
       resetLobbyScope();
       setError("");
       playAudio("close");
@@ -177,6 +185,13 @@ export function App() {
       host: current.host.id === next.id ? { ...current.host, avatarKey: next.avatarKey } : current.host,
       players: current.players.map((player) => player.user.id === next.id ? { ...player, user: next } : player)
     } : current);
+  };
+  const kickPlayer = async (targetUserId: string) => {
+    if (!lobby) return;
+    const updated = await api<Lobby>(`/lobbies/${lobby.code}/players/${targetUserId}/kick`, { method: "POST", body: "{}" });
+    setLobby(updated);
+    setPlayerCardUserId(null);
+    playAudio("success");
   };
 
   // One key per screen drives the slide transitions (#50). The match intro is
@@ -199,6 +214,7 @@ export function App() {
     committedView.current = viewKey;
     if (previous !== "lobby" || viewKey !== "game") return;
     setProfileUserId(null);
+    setPlayerCardUserId(null);
     setTutorialOpen(false);
     setMatchIntro(true);
     playAudio("gameStart", { dedupeKey: `${lobby?.code ?? "game"}-${game?.state.round ?? 1}` });
@@ -214,16 +230,29 @@ export function App() {
   useEffect(() => { if (viewKey !== "access") setBooted(true); }, [viewKey]);
 
   if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
+  const selectedPlayer = lobby?.players.find((player) => player.user.id === playerCardUserId)?.user ?? null;
   const view = !user
     ? <AccessView intro={!booted} error={error} setError={setError} onAccess={(next, created) => { setUser(next); if (created) setTutorialOpen(true); }} />
     : game && lobby && lobby.status !== "OPEN"
-      ? <GameView user={user} lobby={lobby} game={game} connected={connected} introHold={matchIntro} onGame={(next) => acceptGame(lobby.code, next)} onLeave={leaveLobby} onProfile={setProfileUserId} onTutorial={() => setTutorialOpen(true)} />
+      ? <GameView user={user} lobby={lobby} game={game} connected={connected} introHold={matchIntro} onGame={(next) => acceptGame(lobby.code, next)} onLeave={leaveLobby} onProfile={setPlayerCardUserId} onTutorial={() => setTutorialOpen(true)} />
       : lobby
-        ? <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} onProfile={setProfileUserId} />
+        ? <LobbyView user={user} lobby={lobby} connected={connected} error={error} setError={setError} onLeave={leaveLobby} onProfile={setPlayerCardUserId} />
         : <LobbyListView user={user} connected={connected} revision={lobbyRevision} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileUserId(user.id)} />;
   return <>
     <SlideStage viewKey={viewKey}>{view}</SlideStage>
+    {lobby && <aside className={`voice-status voice-status-${voice.status}`} role="status"><span aria-hidden="true">●</span><strong>{voice.status === "connected" ? "Voice verbunden" : voice.status === "requesting" ? "Voice verbindet …" : voice.status === "listen-only" ? "Voice: nur hören" : voice.status === "unsupported" ? "Voice nicht verfügbar" : "Voice getrennt"}</strong>{voice.notice && <small>{voice.notice}</small>}</aside>}
     {matchIntro && game && <MatchStartOverlay round={game.state.round} phase={game.state.phase} />}
+    {user && lobby && selectedPlayer && <PlayerInteractionCard
+      username={selectedPlayer.username}
+      avatar={<Avatar user={selectedPlayer} large />}
+      audio={selectedPlayer.id === user.id ? undefined : voice.participant(selectedPlayer.id)}
+      canKick={lobby.host.id === user.id && selectedPlayer.id !== user.id}
+      onProfile={() => { setPlayerCardUserId(null); setProfileUserId(selectedPlayer.id); }}
+      onVolume={(volume) => voice.setVolume(selectedPlayer.id, volume)}
+      onMute={() => voice.toggleMuted(selectedPlayer.id)}
+      onKick={() => kickPlayer(selectedPlayer.id)}
+      onClose={() => setPlayerCardUserId(null)}
+    />}
     {user && profileUserId && <ProfileDialog viewer={user} userId={profileUserId} onUser={updateUser} onTutorial={() => { setProfileUserId(null); setTutorialOpen(true); }} onClose={() => setProfileUserId(null)} />}
     {user && tutorialOpen && <TutorialDialog user={user} onUser={updateUser} onClose={() => setTutorialOpen(false)} />}
     <AchievementToasts unlocks={unlocks} onDismiss={(id) => setUnlocks((current) => current.filter((node) => node.id !== id))} />
