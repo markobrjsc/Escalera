@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Card } from "@escalera/game-rules";
-import { PileStack } from "./cards.js";
-import { DealStage, DEAL_TIMING, usePrefersReducedMotion } from "./fx.js";
-import type { Rect } from "./fx.js";
+import { CARD_BACK, PileStack } from "./cards.js";
+import { BOARD_TILT, DealStage, DEAL_TIMING, FlightLayer, usePrefersReducedMotion } from "./fx.js";
+import type { FlightSpec, Rect } from "./fx.js";
 
 /* Design-Route (#51): erreichbar über /design/piles oder #/design/piles, ohne
    Login. Ein Feld mit exakt den Klassen und der 3D-Neigung des echten
@@ -28,11 +28,13 @@ export function PileDesignView() {
   const [stage, setStage] = useState<"drop" | "shuffle" | null>(null);
   const [staticCue, setStaticCue] = useState(false);
   const [stageRect, setStageRect] = useState<Rect | null>(null);
+  const [flights, setFlights] = useState<FlightSpec[]>([]);
   const drawPile = useRef<HTMLButtonElement>(null);
+  const discardPile = useRef<HTMLButtonElement>(null);
   const timers = useRef<number[]>([]);
   const reduced = usePrefersReducedMotion();
   const top = discardCount > 0 ? DEMO_TOPS[(discardCount - 1) % DEMO_TOPS.length] : null;
-  const previewing = !!stage || staticCue;
+  const previewing = !!stage || staticCue || flights.length > 0;
 
   useEffect(() => () => {
     timers.current.forEach((timer) => window.clearTimeout(timer));
@@ -64,6 +66,14 @@ export function PileDesignView() {
     setStage("drop");
     schedule(() => setStage("shuffle"), DEAL_TIMING.drop);
     schedule(() => setStage(null), DEAL_TIMING.drop + DEAL_TIMING.shuffle);
+  };
+
+  const playFlight = () => {
+    if (previewing) return;
+    const source = drawPile.current?.getBoundingClientRect();
+    const target = discardPile.current?.getBoundingClientRect();
+    if (!source || !target) return;
+    setFlights([{ key: `pile-flight-${Date.now()}`, from: source, to: target, face: CARD_BACK, showBack: true, fromTilt: BOARD_TILT, toTilt: BOARD_TILT, duration: 1400, via: { dx: 0, dy: -90 } }]);
   };
 
   const previewStatus = staticCue
@@ -109,16 +119,18 @@ export function PileDesignView() {
               <button type="button" onClick={() => setPreset(0, 0)}>Leer</button>
             </div>
             <button type="button" className="button-primary pile-design-preview" disabled={previewing} aria-describedby="pile-motion-note" onClick={playIntro}>{previewing ? "Vorschau läuft …" : reduced ? "Statischen Deck-Cue zeigen" : "Deck-Intro + Shuffle"}</button>
+            <button type="button" className="pile-design-preview" disabled={previewing} onClick={playFlight}>Kartenflug 5:7 prüfen</button>
           </div>
           <p className="muted pile-design-note" id="pile-motion-note">{reduced ? "Bewegung ist reduziert: Die Vorschau zeigt den Ablauf als ruhigen Status-Cue. Volle Bewegung ist über ?motion=full verfügbar." : "Klick auf die Stapel zieht beziehungsweise legt eine Beispielkarte ab."}</p>
           <output className={`pile-preview-status ${previewing ? "is-active" : ""}`} aria-live="polite">{previewStatus}</output>
         </aside>
       </div>
       <div className="pile-station">
-        <div className="pile-slot"><button type="button" className="game-pile discard-pile" aria-label={top ? `Ablage, oben liegt ${top.kind === "joker" ? "ein Joker" : `${top.rank}`}` : "Ablage ist leer"} onClick={() => setDiscardCount((current) => Math.min(60, current + 1))}><PileStack count={discardCount} top={top} kind="discard" /></button></div>
+        <div className="pile-slot"><button ref={discardPile} type="button" className="game-pile discard-pile" aria-label={top ? `Ablage, oben liegt ${top.kind === "joker" ? "ein Joker" : `${top.rank}`}` : "Ablage ist leer"} onClick={() => setDiscardCount((current) => Math.min(60, current + 1))}><PileStack count={discardCount} top={top} kind="discard" /></button></div>
         <span>Ablage <b>[ {discardCount} ]</b></span>
       </div>
     </section>
     {stage && stageRect && <DealStage rect={stageRect} stage={stage} />}
+    <FlightLayer flights={flights} reduced={reduced} onDone={(key) => setFlights((current) => current.filter((flight) => flight.key !== key))} />
   </main>;
 }

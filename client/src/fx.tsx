@@ -227,14 +227,18 @@ function FlightCard({ flight, reduced, onDone }: { flight: FlightSpec; reduced: 
     let disposed = false;
     let finished = false;
     const animations: Animation[] = [];
-    const { from, to } = flight;
-    // Use both dimensions. A board card is seen in perspective while a seat
-    // card is flat; a uniform width-only scale used to leave flights visibly
-    // stretched or cropped at their destination.
-    const scaleX = to.width / Math.max(1, from.width);
-    const scaleY = to.height / Math.max(1, from.height);
+    // getBoundingClientRect() of the tilted board is not card-shaped. Fit a
+    // canonical 5:7 card inside both endpoint boxes before animating; this
+    // prevents the image itself from being stretched or cropped in flight.
+    const fit = (rect: Rect): Rect => {
+      const width = Math.min(rect.width, rect.height * 5 / 7);
+      const height = width * 7 / 5;
+      return { width, height, left: rect.left + (rect.width - width) / 2, top: rect.top + (rect.height - height) / 2 };
+    };
+    const from = fit(flight.from); const to = fit(flight.to);
+    const scale = to.width / Math.max(1, from.width);
     const start = `translate(${from.left}px, ${from.top}px) scale(1)`;
-    const end = `translate(${to.left}px, ${to.top}px) scale(${scaleX}, ${scaleY})`;
+    const end = `translate(${to.left}px, ${to.top}px) scale(${scale})`;
     const duration = flight.duration ?? DEFAULT_FLIGHT_MS;
     const finish = () => {
       if (disposed || finished) return;
@@ -260,33 +264,30 @@ function FlightCard({ flight, reduced, onDone }: { flight: FlightSpec; reduced: 
     const frames: Keyframe[] = flight.via
       ? [
           { transform: start, offset: 0 },
-          { transform: `translate(${from.left + flight.via.dx}px, ${from.top + flight.via.dy}px) scale(${1 + (scaleX - 1) * .35}, ${1 + (scaleY - 1) * .35})`, offset: .38 },
+          { transform: `translate(${from.left + flight.via.dx}px, ${from.top + flight.via.dy}px) scale(${1 + (scale - 1) * .35})`, offset: .38 },
           { transform: end, offset: 1 }
         ]
       : [{ transform: start }, { transform: end }];
     const move = element.animate(frames, { duration, delay: flight.delay ?? 0, easing: "cubic-bezier(.3,.7,.25,1)", fill: "both" });
     animations.push(move);
-    const tiltFrom = flight.fromTilt ?? 0; const tiltTo = flight.toTilt ?? 0;
-    const tiltAt = (offset: number) => tiltFrom + (tiltTo - tiltFrom) * offset;
+    // Flights stay screen-flat. Applying the board's rotateX to the card face
+    // visually compressed its height and made a mathematically 5:7 box look
+    // wide again. The source/target piles themselves retain their board tilt.
     if (flight.flip) {
       animations.push(faces.animate([
-        { transform: `rotateX(${tiltFrom}deg) rotateY(180deg)`, offset: 0 },
-        { transform: `rotateX(${tiltAt(flight.flip.start)}deg) rotateY(180deg)`, offset: flight.flip.start },
-        { transform: `rotateX(${tiltAt(flight.flip.end)}deg) rotateY(0deg)`, offset: flight.flip.end },
-        { transform: `rotateX(${tiltTo}deg) rotateY(0deg)`, offset: 1 }
-      ], { duration, delay: flight.delay ?? 0, easing: "linear", fill: "both" }));
-    } else if (tiltFrom !== tiltTo) {
-      animations.push(faces.animate([
-        { transform: `rotateX(${tiltFrom}deg) rotateY(${flight.showBack ? 180 : 0}deg)` },
-        { transform: `rotateX(${tiltTo}deg) rotateY(${flight.showBack ? 180 : 0}deg)` }
+        { transform: "rotateY(180deg)", offset: 0 },
+        { transform: "rotateY(180deg)", offset: flight.flip.start },
+        { transform: "rotateY(0deg)", offset: flight.flip.end },
+        { transform: "rotateY(0deg)", offset: 1 }
       ], { duration, delay: flight.delay ?? 0, easing: "linear", fill: "both" }));
     } else {
-      faces.style.transform = `rotateX(${tiltFrom}deg) rotateY(${flight.showBack ? 180 : 0}deg)`;
+      faces.style.transform = `rotateY(${flight.showBack ? 180 : 0}deg)`;
     }
     move.addEventListener("finish", finish, { once: true });
     return cancelAnimations;
   }, [flight, reduced]);
-  return <div className="fx-flight" ref={outer} style={{ width: flight.from.width, height: flight.from.height }}>
+  const flightWidth = Math.min(flight.from.width, flight.from.height * 5 / 7);
+  return <div className="fx-flight" ref={outer} style={{ width: flightWidth, height: flightWidth * 7 / 5 }}>
     <div className="fx-flight-inner" ref={inner}>
       <img className="fx-face" src={flight.face} alt="" draggable={false} />
       <img className="fx-face fx-back" src={CARD_BACK} alt="" draggable={false} />
@@ -301,7 +302,11 @@ function FlightCard({ flight, reduced, onDone }: { flight: FlightSpec; reduced: 
    rect; all motion lives in animations.css. Also mounted standalone on the
    /design/piles route so the choreography can be tuned in isolation (#51). */
 export function DealStage({ rect, stage }: { rect: Rect; stage: "drop" | "shuffle" }) {
-  const style = { left: rect.left, top: rect.top, width: rect.width, height: rect.height } as React.CSSProperties;
+  // The pile lives in a tilted board and its screen-space bounding box is too
+  // wide. The intro deck must remain a real 5:7 card just like FlightCard.
+  const width = Math.min(rect.width, rect.height * 5 / 7);
+  const height = width * 7 / 5;
+  const style = { left: rect.left + (rect.width - width) / 2, top: rect.top + (rect.height - height) / 2, width, height } as React.CSSProperties;
   return <div className="deal-stage" data-stage={stage} aria-hidden="true">
     <div className="deal-deck" style={style}><img src={CARD_BACK} alt="" draggable={false} /></div>
     {stage === "shuffle" && <>
