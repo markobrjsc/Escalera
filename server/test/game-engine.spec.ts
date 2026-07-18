@@ -53,6 +53,16 @@ describe("autoritärer Spielzug", () => {
     expect(result.melds[0].cards).toHaveLength(4);
   });
 
+  it("führt neu ausgelegte Gruppen desselben Werts in die bestehende Meld zusammen", () => {
+    const drawn = drawCard(baseState(), "p1", "draw");
+    const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
+    const armed = { ...phased, players: phased.players.map((player) => player.userId === "p1" ? { ...player, hand: [card("5a", "5"), card("5b", "5", "hearts"), card("5d", "5", "spades"), card("keep", "7")] } : player) };
+    const merged = layAdditionalMeld(armed, "p1", ["5a", "5b", "5d"], false);
+    expect(merged.melds).toHaveLength(1);
+    expect(merged.melds[0].cards).toHaveLength(6);
+    expect(merged.melds[0].id).toBe(phased.melds[0].id);
+  });
+
   it("beendet die Runde, wenn ein Spieler durch Auslegen seine letzte Karte loswird", () => {
     const drawn = drawCard(baseState(), "p1", "draw");
     const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
