@@ -427,3 +427,59 @@
 
 @media (max-height: 600px) and (orientation: portrait) { .login-card { gap: .7rem; padding: 1rem; }.login-card .brand { font-size: 2rem; }.login-note { font-size: .68rem; }.lobby-list-content { gap: .4rem; }.lobby-card { min-height: 4.8rem; }.member-card { min-height: 3rem; } }
 @media (max-width: 390px) { .create-button { padding-inline: .55rem; }.settings-form { grid-template-columns: 1fr; }.settings-form > button { grid-column: 1; }.audio-levels { grid-template-columns: 1fr; } }
+
+/* Subtle layout polish for #71/#74. The original palette and geometry remain. */
+.app-header { border-bottom-color: #52796f88; background: linear-gradient(180deg, #0d0d0df2, #0d0d0dcc); }
+.login-card, .lobby-browser, .members-panel, .profile-dialog { border-color: #ffffffcc; }
+.login-card { max-height: 88dvh; }
+.lobby-browser, .members-panel { box-shadow: inset 0 1px 0 #ffffff0a, 0 .7rem 1.6rem #0005; }
+.lobby-card { border-color: #ffffff99; background: linear-gradient(90deg, #20312d66, var(--color-onyx) 42%); }
+.lobby-card:hover, .lobby-card:focus-within { border-color: var(--color-teal); }
+.lobby-tools input { background: #111; }
+.empty-state { border: 1px dashed #52796f66; }
+
+.settings-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-form > label:first-of-type, .settings-form > .toggle, .settings-form > button, .settings-form > .dialog-divider { grid-column: 1 / -1; }
+.settings-form > label { min-width: 0; }
+.toggle { border-width: 1px; border-color: #52796f99; border-radius: var(--radius-sm); background: #20312d55; }
+
+.lobby-name { text-wrap: balance; }
+.lobby-settings-row { border-block: 1px solid #52796f55; padding-block: var(--space-1); }
+.lobby-layout .member-card { border-radius: var(--radius-sm); box-shadow: inset 0 1px 0 #ffffff0a; }
+.member-state { border: 1px solid currentColor; border-radius: 999px; padding: .15rem .45rem; }
+
+.player-stat-labels { display: flex !important; align-items: center; gap: calc(.28 * var(--u)); overflow: visible !important; }
+.player-stat { display: inline-flex !important; min-height: calc(2.15 * var(--u)); align-items: center; gap: calc(.22 * var(--u)); overflow: visible !important; border: var(--hair) solid #52796faa; border-radius: var(--radius-sm); padding: 0 calc(.38 * var(--u)); color: var(--color-muted); font-size: calc(1.05 * var(--fu)); line-height: 1; }
+.player-stat b { color: var(--color-white); font-size: inherit; }
+.active-player-hud, .phase-hud, .turn-order-player { background: #0d0d0dcc; box-shadow: inset 0 1px 0 #ffffff0a, 0 .35rem .8rem #0005; }
+.phase-hud { max-width: calc(29 * var(--u)); }
+.phase-hud .phase-requirement { color: var(--color-white); line-height: 1.25; white-space: normal; }
+
+.game-menu { width: min(78vw, 19rem); gap: .55rem; padding: clamp(.65rem, 2.2vmin, 1rem); }
+.game-menu > button:not(.leave-game), .game-menu .sort-control button { min-height: max(2.35rem, calc(.82 * var(--control-height))); }
+.game-menu .dialog-title { border-bottom: 1px solid #52796f66; padding-bottom: .4rem; }
+.game-menu .leave-game { min-height: max(2.35rem, calc(.82 * var(--control-height))); }
+
+.stat-grid span { border-color: #52796f99; border-radius: var(--radius-sm); background: #20312d44; }
+.profile-audio, .player-voice-controls { border-color: #52796f99; border-radius: var(--radius-sm); }
+.player-voice-controls { background: #20312d66; }
+.player-voice-controls .audio-mute { border-radius: var(--radius-sm); }
+
+.tree-row-title { width: max-content; transform: translateX(-50%); text-align: center; }
+.tree-wire { stroke-width: 2.5; }
+.tree-tile.is-root { border-style: solid; border-radius: 50%; }
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .game-menu { inset: var(--edge) auto auto var(--edge); width: min(70vw, 28rem); height: auto; max-height: calc(100dvh - 2 * var(--edge)); grid-template-columns: 1fr 1fr; grid-template-rows: auto auto repeat(2, auto); grid-auto-rows: max-content; align-content: start; }
+  .game-menu .dialog-title, .game-menu .menu-sort, .game-menu .leave-game { grid-column: 1 / -1; }
+  .game-menu > button:not(.leave-game), .game-menu .sort-control button, .game-menu .leave-game { min-height: 44px; font-size: var(--font-xs); }
+}
+
+@media (max-width: 480px) {
+  .settings-form { grid-template-columns: 1fr; }
+  .settings-form > * { grid-column: 1 !important; }
+  .profile-dialog { padding: var(--space-3); }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .player-voice-controls { grid-template-columns: 1fr; }
+  .player-voice-controls .audio-mute { width: 100%; }
+}
