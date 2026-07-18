@@ -7,8 +7,11 @@ import { BOARD_TILT, DealStage, DEAL_TIMING, FlightLayer, MatchStartOverlay, MAT
 import type { FlightSpec, Rect } from "./fx.js";
 import { audioCueForGameAction, audioSceneForView, useAudio } from "./audio.js";
 import type { AudioPreferences } from "./audio.js";
-import { PlayerInteractionCard } from "./PlayerInteractionCard.js";
+import { ConfirmationDialog, PlayerInteractionCard } from "./PlayerInteractionCard.js";
 import { useLobbyVoice } from "./voiceChat.js";
+import { runSingleFlight } from "./singleFlight.js";
+import { requiresLeaveConfirmation } from "./leaveConfirmation.js";
+import { buildScoreboardRows } from "./scoreboard.js";
 
 const API_URL = "/api";
 const SOCKET_URL = window.location.origin;
@@ -49,6 +52,7 @@ type Game = {
     melds: GameMeld[];
     roundEndedById: string | null;
     lastRoundResult: RoundResult | null;
+    roundResults: RoundResult[];
     placements: FinalPlacement[];
     recentActions: RecentGameAction[];
     players: Array<{ userId: string; handCount: number; coins: number; phaseLaid: boolean; totalPenalty: number; timeouts: number }>;
@@ -158,14 +162,15 @@ export function App() {
 
   const openLobby = async (code: string) => { const value = await api<Lobby>(`/lobbies/${code}`); enterLobbyScope(value.code); setLobby(value); if (value.status === "ACTIVE") acceptGame(value.code, await api<Game>(`/lobbies/${value.code}/game`)); };
   const leaveLobby = async () => {
-    if (!lobby) return;
+    if (!lobby) return false;
     try {
       await api(`/lobbies/${lobby.code}/leave`, { method: "POST", body: "{}" });
       setLobby(null);
       setPlayerCardUserId(null);
       resetLobbyScope();
       playAudio("close");
-    } catch (reason) { setError(message(reason)); }
+      return true;
+    } catch (reason) { setError(message(reason)); return false; }
   };
   const logout = async () => {
     try {
@@ -240,7 +245,11 @@ export function App() {
         : <LobbyListView user={user} connected={connected} revision={lobbyRevision} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileUserId(user.id)} />;
   return <>
     <SlideStage viewKey={viewKey}>{view}</SlideStage>
-    {lobby && <aside className={`voice-status voice-status-${voice.status}`} role="status"><span aria-hidden="true">●</span><strong>{voice.status === "connected" ? "Voice verbunden" : voice.status === "requesting" ? "Voice verbindet …" : voice.status === "listen-only" ? "Voice: nur hören" : voice.status === "unsupported" ? "Voice nicht verfügbar" : "Voice getrennt"}</strong>{voice.notice && <small>{voice.notice}</small>}</aside>}
+    {lobby && <aside className={`voice-status voice-status-${voice.status} ${game && lobby.status !== "OPEN" ? "voice-status-game" : ""} ${voice.selfMuted ? "is-self-muted" : ""}`} aria-label="Voice-Chat">
+      <span className="voice-connection" role="status" aria-live="polite"><span aria-hidden="true">●</span><strong>{voice.status === "connected" ? "Voice verbunden" : voice.status === "requesting" ? "Voice verbindet …" : voice.status === "listen-only" ? "Voice: nur hören" : voice.status === "unsupported" ? "Voice nicht verfügbar" : "Voice getrennt"}</strong></span>
+      <button type="button" className="voice-self-mute" data-audio="silent" disabled={!voice.canSelfMute} aria-pressed={voice.selfMuted} aria-label={voice.selfMuted ? "Eigenes Mikrofon wieder einschalten" : "Eigenes Mikrofon stummschalten"} title={!voice.canSelfMute ? "Mikrofon ist nicht verfügbar" : voice.selfMuted ? "Mikrofon einschalten" : "Mikrofon stummschalten"} onClick={voice.toggleSelfMuted}><span aria-hidden="true">{voice.selfMuted ? "◉̸" : "◉"}</span><strong>{voice.selfMuted ? "Mikro aus" : "Mikro an"}</strong></button>
+      {voice.notice && <small>{voice.notice}</small>}
+    </aside>}
     {matchIntro && game && <MatchStartOverlay round={game.state.round} phase={game.state.phase} />}
     {user && lobby && selectedPlayer && <PlayerInteractionCard
       username={selectedPlayer.username}
@@ -353,7 +362,7 @@ function LobbySettingsDialog({ onClose, onCreated, setError, lobby, defaultName 
   return <div className={`dialog-backdrop ${phase === "closing" ? "is-closing" : ""}`} onAnimationEnd={(event) => { if (phaseRef.current === "closing" && event.target === event.currentTarget) finishClose(); }} role="presentation"><section className="surface dialog" role="dialog" aria-modal="true" aria-labelledby="lobby-settings-title"><div className="dialog-title"><h2 id="lobby-settings-title">{lobby ? "Einstellungen" : "Lobby erstellen"}</h2><button className="button-icon" disabled={locked} onClick={() => close()} aria-label="Schließen">×</button></div><hr className="dialog-divider" /><form onSubmit={submit} className="settings-form"><label>Lobbyname<input disabled={locked} value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={40} placeholder="Meine Lobby" required /></label><label>Maximale Spieler<select disabled={locked} value={settings.maxPlayers} onChange={(event) => setSettings({ ...settings, maxPlayers: Number(event.target.value) })}>{[2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Joker pro Spieler<select disabled={locked} value={settings.jokersPerPlayer} onChange={(event) => setSettings({ ...settings, jokersPerPlayer: Number(event.target.value) })}>{[0,1,2,3,4,5,6].map((value) => <option key={value}>{value}</option>)}</select></label><label>Zeit pro Zug<select disabled={locked} value={settings.maxTurnSeconds} onChange={(event) => setSettings({ ...settings, maxTurnSeconds: Number(event.target.value) })}>{[30,45,60,90,120,180].map((value) => <option key={value} value={value}>{value} Sekunden</option>)}</select></label><label className="toggle"><input disabled={locked} type="checkbox" checked={settings.streetsRequireSameSuit} onChange={(event) => setSettings({ ...settings, streetsRequireSameSuit: event.target.checked })} />Straße gleiches Zeichen (♥ ♥ ♥) </label><label className="toggle"><input disabled={locked} type="checkbox" checked={settings.confirmTurnEnd} onChange={(event) => setSettings({ ...settings, confirmTurnEnd: event.target.checked })} />Ablegen bestätigen</label><hr className="dialog-divider" /><button className="button-primary" disabled={locked}>{phase === "submitting" ? "Speichere …" : lobby ? "Speichern" : "Lobby erstellen"}</button></form></section></div>;
 }
 
-function LobbyView({ user, lobby, connected, error, setError, onLeave, onProfile }: { user: User; lobby: Lobby; connected: boolean; error: string; setError: (value: string) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void }) {
+function LobbyView({ user, lobby, connected, error, setError, onLeave, onProfile }: { user: User; lobby: Lobby; connected: boolean; error: string; setError: (value: string) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void }) {
   const { play: playAudio } = useAudio();
   const [editing, setEditing] = useState(false);
   const self = lobby.players.find((player) => player.user.id === user.id); const isHost = lobby.host.id === user.id;
@@ -395,13 +404,19 @@ type Arrival = { from: Rect; face: string; showBack?: boolean; flip?: { start: n
 const DEAL_STEP = GAME_START_TIMING_MS.dealStep;    // ms between two consecutively dealt cards
 const DEAL_FLIGHT = GAME_START_TIMING_MS.dealFlight; // ms a dealt card travels to its owner
 
-function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<void>; onProfile: (userId: string) => void; onTutorial: () => void }) {
+function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void; onTutorial: () => void }) {
   const { play: playAudio, setScene: setAudioScene } = useAudio();
   const [menu, setMenu] = useState(false); const [scoreboard, setScoreboard] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
-  const [selected, setSelected] = useState<string[]>([]); const [busy, setBusy] = useState(false); const [actionError, setActionError] = useState("");
+  const [selected, setSelected] = useState<string[]>([]); const [pendingAction, setPendingAction] = useState<string | null>(null); const [actionError, setActionError] = useState("");
+  const actionGate = useRef(false);
+  const busy = pendingAction !== null;
   const [dismissedRound, setDismissedRound] = useState<number | null>(null);
+  const [leaveConfirmation, setLeaveConfirmation] = useState(false);
+  const [leaveBusy, setLeaveBusy] = useState(false);
+  const leaveGate = useRef(false);
   const [drag, setDrag] = useState<{ cardId: string; x: number; y: number; zone: string | null } | null>(null);
   const [events, setEvents] = useState<Array<{ key: string; text: string }>>([]);
+  const [buyPosition, setBuyPosition] = useState<{ left: number; top: number; width: number } | null>(null);
   const reduced = usePrefersReducedMotion();
   const anchors = useRef(new Map<string, HTMLElement>());
   const anchor = useCallback((key: string) => (el: HTMLElement | null) => { if (el) anchors.current.set(key, el); else anchors.current.delete(key); }, []);
@@ -458,6 +473,24 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
   const gameRef = useRef(game); gameRef.current = game;
 
   const rectOf = useCallback((key: string): Rect | null => { const element = anchors.current.get(key); if (!element) return null; const box = element.getBoundingClientRect(); return { left: box.left, top: box.top, width: box.width, height: box.height }; }, []);
+  useLayoutEffect(() => {
+    if (!game.state.discardOffer?.available) { setBuyPosition(null); return; }
+    const update = () => {
+      const discard = rectOf("discard");
+      if (!discard) return;
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(Math.max(discard.width + 16, 144), viewportWidth - 16);
+      const gap = Math.max(8, discard.height * .05);
+      const hudBottom = root.current?.querySelector(".game-hud")?.getBoundingClientRect().bottom ?? 0;
+      const left = Math.min(Math.max(discard.left + discard.width / 2 - width / 2, 8), viewportWidth - width - 8);
+      const top = Math.max(hudBottom + gap, discard.top - gap - 48);
+      setBuyPosition((current) => current && Math.abs(current.left - left) < .5 && Math.abs(current.top - top) < .5 && Math.abs(current.width - width) < .5 ? current : { left, top, width });
+    };
+    update();
+    const frame = window.requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    return () => { window.cancelAnimationFrame(frame); window.removeEventListener("resize", update); };
+  }, [game.state.discardOffer?.available, game.version, rectOf]);
   const seatTarget = useCallback((userId: string): Rect | null => { const box = rectOf(`seat:${userId}`); return box ? fitCardRect(box, .8) : null; }, [rectOf]);
   const seatRects = useRef(new Map<string, Rect>());
   const previousSeatRects = useRef(new Map<string, Rect>());
@@ -503,7 +536,10 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
   const visualBusy = introHold || dealing || flights.length > 0 || Object.keys(arrivals).length > 0;
   const canDraw = mayAct && !game.state.turn.hasDrawn && !busy && !visualBusy;
   const canPlay = mayAct && game.state.turn.hasDrawn && !busy && !visualBusy;
-  const canBuy = Boolean(game.state.discardOffer?.available) && self.coins >= 1 && !busy && !visualBusy;
+  // The buy offer is server-authoritative and time-sensitive. It remains
+  // actionable while an older card flight is finishing; starting the purchase
+  // fast-forwards that obsolete choreography to the current pile state.
+  const canBuy = Boolean(game.state.discardOffer?.available) && self.coins >= 1 && !busy;
   const selectedCards = useMemo(() => hand.filter((card) => selected.includes(card.id)), [hand, selected]);
   const canDiscard = canPlay && selected.length === 1;
   // Only offer the meld zone when the selection would actually pass validation.
@@ -788,12 +824,15 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
   }, [game.version, playAudio]);
   useEffect(() => { if (!events.length) return; const timer = window.setTimeout(() => setEvents((current) => current.slice(1)), 2600); return () => window.clearTimeout(timer); }, [events]);
 
-  const act = async (path: string, body?: object) => {
-    if (visualBusy) return;
-    setBusy(true); setActionError("");
-    try { const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) }); onGame(result); setSelected([]); }
-    catch (reason) { if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game); setActionError(message(reason)); playAudio("error"); }
-    finally { setBusy(false); }
+  const act = async (path: string, body?: object, options: { interruptVisuals?: boolean } = {}) => {
+    if (visualBusy && !options.interruptVisuals) return;
+    await runSingleFlight(actionGate, async () => {
+      if (options.interruptVisuals) cancelVisuals();
+      setPendingAction(path); setActionError("");
+      try { const result = await api<Game>(`/games/${lobby.code}/${path}`, { method: "POST", body: JSON.stringify({ commandId: crypto.randomUUID(), expectedVersion: game.version, payload: body ?? {} }) }); onGame(result); setSelected([]); }
+      catch (reason) { if (reason instanceof ApiError && typeof reason.body === "object" && reason.body && "state" in reason.body && "version" in reason.body) onGame(reason.body as Game); setActionError(message(reason)); playAudio("error"); }
+      finally { setPendingAction(null); }
+    });
   };
   const toggleCard = (cardId: string) => setSelected((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
   const laySelected = () => { try { if (self.phaseLaid) void act("melds", { cardIds: selected }); else void act("phase", { combinations: phaseGroups(selectedCards, game.state.phase).map((group) => group.map((card) => card.id)) }); } catch (reason) { setActionError(message(reason)); playAudio("dropInvalid"); } };
@@ -806,6 +845,32 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     if (zone.startsWith("meld:") && openMelds.includes(zone.slice(5)) && card) return void act(`melds/${zone.slice(5)}/cards`, { cardId: card });
     setActionError("Diese Karte passt hier nicht.");
     playAudio("dropInvalid");
+  };
+  const requestLeave = () => {
+    setMenu(false);
+    if (requiresLeaveConfirmation(game.state.status)) setLeaveConfirmation(true);
+    else void onLeave();
+  };
+  const buyDiscard = () => { void act("buy", undefined, { interruptVisuals: true }); };
+  const buyOnPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault(); event.stopPropagation(); buyDiscard();
+  };
+  const buyOnClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    // Pointer and touch input already commits on pointerup. A synthetic click
+    // with detail 0 is keyboard or assistive input and must remain supported.
+    if (event.detail === 0) buyDiscard();
+  };
+  const confirmLeave = async () => {
+    await runSingleFlight(leaveGate, async () => {
+      setLeaveBusy(true);
+      const left = await onLeave();
+      if (!left) {
+        setActionError("Die Lobby konnte nicht verlassen werden. Bitte versuche es erneut.");
+        setLeaveBusy(false);
+      }
+    });
   };
 
   // Pointer events rather than HTML5 drag-and-drop: the native API emits nothing
@@ -846,6 +911,7 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
       <section className="phase-hud"><span className="hud-kicker">Runde {game.state.round}</span><strong>Phase {game.state.phase} / 7</strong><span>{self.phaseLaid ? "Phase ausgelegt" : "Phase offen"}</span></section>
     </header>
     <p className="turn-hint" aria-live="polite">{hint}</p>
+    {game.state.discardOffer?.available && buyPosition && <button type="button" className="buy-button is-available" style={{ left: buyPosition.left, top: buyPosition.top, width: buyPosition.width }} disabled={!canBuy} aria-busy={pendingAction === "buy"} onPointerUp={buyOnPointerUp} onClick={buyOnClick}>{pendingAction === "buy" ? "Karte wird gekauft …" : "Ablage kaufen · 1 Münze"}</button>}
     <section className="game-board">
       <div className="pile-station">
         <div className={`pile-slot ${zoneClass("draw")}`} data-zone="draw" onClick={() => runZone("draw")}><button ref={anchor("draw")} className="game-pile draw-pile" aria-label={`Vom Stapel ziehen, ${shownDraw} Karten verbleiben`} disabled={!canDraw}><PileStack count={shownDraw} top={null} kind="draw" /></button></div>
@@ -857,7 +923,6 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
       <div className="pile-station">
         <div className={`pile-slot ${zoneClass("discard")}`} data-zone="discard" onClick={() => runZone("discard")}><button ref={anchor("discard")} className="game-pile discard-pile" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : shownDiscard.top ? `${cardLabel(shownDiscard.top)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)}><PileStack count={shownDiscard.count} top={shownDiscard.top} kind="discard" /></button></div>
         <span>Ablage <b>[ {shownDiscard.count} ]</b></span>
-        {game.state.discardOffer?.available && <button className="buy-button is-available" disabled={!canBuy} onClick={() => void act("buy")}>Ablage kaufen · 1 Münze</button>}
       </div>
     </section>
     <section className="player-hand" ref={anchor("hand")}><div className="hand-cards" role="group" aria-label="Deine Handkarten">{shownHand.map((card, index) => <button type="button" data-fx-card={card.id} onPointerDown={startDrag(card)} aria-label={`${cardLabel(card)}${selected.includes(card.id) ? ", ausgewählt" : ", nicht ausgewählt"}`} aria-pressed={selected.includes(card.id)} onClick={() => toggleCard(card.id)} className={`playing-card ${selected.includes(card.id) ? "is-selected" : ""} ${drag?.cardId === card.id ? "is-dragged" : ""} ${arrivals[card.id] ? "is-incoming" : ""}`} style={{ "--card-count": shownHand.length, "--card-index": index } as React.CSSProperties} key={card.id}><span className="card-3d"><CardFace card={card} /></span></button>)}</div></section>
@@ -868,7 +933,8 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     {drag && <div className="drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">{(() => { const card = hand.find((entry) => entry.id === drag.cardId); return card ? <CardFace card={card} /> : null; })()}</div>}
     <FlightLayer flights={flights} reduced={reduced} onDone={(key) => setFlights((current) => current.filter((entry) => entry.key !== key))} />
     {dealStage && dealRect && <DealStage rect={dealRect} stage={dealStage} />}
-    {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><div className="menu-sort"><span className="hud-kicker">Hand sortieren</span><div className="sort-control"><button className={sort === "rank" ? "is-active" : ""} aria-pressed={sort === "rank"} onClick={() => setSort("rank")}>Wert</button><button className={sort === "suit" ? "is-active" : ""} aria-pressed={sort === "suit"} onClick={() => setSort("suit")}>Farbe</button></div></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => { setMenu(false); onProfile(user.id); }}>Mein Profil</button><button onClick={() => { setMenu(false); onTutorial(); }}>Kurzanleitung</button><button className="button-danger leave-game" onClick={() => void onLeave()}>Lobby verlassen</button></aside>}
+    {menu && <aside className="game-menu surface"><div className="dialog-title"><h2>Spielmenü</h2><button className="button-icon" onClick={() => setMenu(false)}>×</button></div><div className="menu-sort"><span className="hud-kicker">Hand sortieren</span><div className="sort-control"><button className={sort === "rank" ? "is-active" : ""} aria-pressed={sort === "rank"} onClick={() => setSort("rank")}>Wert</button><button className={sort === "suit" ? "is-active" : ""} aria-pressed={sort === "suit"} onClick={() => setSort("suit")}>Farbe</button></div></div><button onClick={() => { setMenu(false); setScoreboard(true); }}>Scoreboard</button><button onClick={() => { setMenu(false); onProfile(user.id); }}>Mein Profil</button><button onClick={() => { setMenu(false); onTutorial(); }}>Kurzanleitung</button><button className="button-danger leave-game" onClick={requestLeave}>Lobby verlassen</button></aside>}
+    {leaveConfirmation && <ConfirmationDialog title="Laufende Partie verlassen?" message="Du verlässt die Partie sofort. Falls du gerade am Zug bist, wird dein Zug automatisch beendet." busy={leaveBusy} confirmLabel="Ja, Partie verlassen" busyLabel="Partie wird verlassen …" onConfirm={() => void confirmLeave()} onCancel={() => setLeaveConfirmation(false)} />}
     {scoreboard && <Scoreboard game={game} lobby={lobby} onClose={() => setScoreboard(false)} />}
     {showRoundResult && <RoundResultOverlay result={game.state.lastRoundResult!} nextPhase={game.state.phase} lobby={lobby} onContinue={() => setDismissedRound(game.state.lastRoundResult!.round)} />}
     {game.state.status === "FINISHED" && <FinalResultOverlay placements={game.state.placements} lobby={lobby} onLeave={onLeave} />}
@@ -893,14 +959,16 @@ function SignalIcon({ online }: { online: boolean }) {
 }
 
 function Scoreboard({ game, lobby, onClose }: { game: Game; lobby: Lobby; onClose: () => void }) {
-  return <div className="game-result-overlay"><section className="surface result-panel"><div className="dialog-title"><div><p className="overline">Runde {game.state.round} · Phase {game.state.phase}</p><h2>Scoreboard</h2></div><button className="button-icon" onClick={onClose}>×</button></div><div className="result-table">{[...game.state.players].sort((a, b) => a.totalPenalty - b.totalPenalty).map((player) => <div className="result-row" key={player.userId}><strong>{playerName(lobby, player.userId)}</strong><span>{player.handCount} Karten</span><span>{player.coins} Münzen</span><b>{player.totalPenalty} P</b></div>)}</div></section></div>;
+  const rounds = [...game.state.roundResults].sort((a, b) => a.round - b.round);
+  const rows = buildScoreboardRows(rounds, game.state.players);
+  return <div className="game-result-overlay"><section className="surface result-panel scoreboard-panel"><div className="dialog-title"><div><p className="overline">Runde {game.state.round} · Phase {game.state.phase}</p><h2>Scoreboard</h2></div><button className="button-icon" onClick={onClose}>×</button></div><div className="result-table scoreboard-current">{rows.map((row) => { const player = game.state.players.find((entry) => entry.userId === row.userId)!; return <div className="result-row" key={row.userId}><strong>{playerName(lobby, row.userId)}</strong><span>{player.handCount} Karten</span><span>{player.coins} Münzen</span><b>{row.totalPenalty} P</b></div>; })}</div><section className="score-history" aria-labelledby="score-history-title"><div className="score-history-heading"><h3 id="score-history-title">Strafen je Runde</h3><span>{rounds.length} von 7 abgeschlossen</span></div>{rounds.length ? <div className="score-history-scroll" tabIndex={0}><table><caption className="sr-only">Strafpunkte aller Spieler nach Runde</caption><thead><tr><th scope="col">Spieler</th>{rounds.map((round) => <th scope="col" title={`Runde ${round.round}, Phase ${round.phase}`} key={round.round}><span>R{round.round}</span><small>Phase {round.phase}</small></th>)}<th scope="col">Gesamt</th></tr></thead><tbody>{rows.map((row) => <tr key={row.userId}><th scope="row">{playerName(lobby, row.userId)}</th>{row.penalties.map((penalty, index) => <td key={`${row.userId}-${rounds[index].round}`}>{penalty === null ? <span aria-label="Keine Wertung">—</span> : penalty === 0 ? "0" : `+${penalty}`}</td>)}<td><strong>{row.totalPenalty}</strong></td></tr>)}</tbody></table></div> : <p className="score-history-empty">Noch keine Runde abgeschlossen.</p>}</section></section></div>;
 }
 
 function RoundResultOverlay({ result, nextPhase, lobby, onContinue }: { result: RoundResult; nextPhase: number; lobby: Lobby; onContinue: () => void }) {
   return <div className="game-result-overlay"><section className="surface result-panel"><div><p className="overline">Phase {result.phase} geschafft von {playerName(lobby, result.endedById)}</p><h2>Runde {result.round} beendet</h2></div><div className="result-table">{[...result.scores].sort((a, b) => a.totalPenalty - b.totalPenalty).map((score) => <div className="result-row" key={score.userId}><strong>{playerName(lobby, score.userId)}</strong><span>+{score.penalty} Punkte</span><b>{score.totalPenalty} P gesamt</b></div>)}</div><button className="button-primary" onClick={onContinue}>Phase {nextPhase} starten</button></section></div>;
 }
 
-function FinalResultOverlay({ placements, lobby, onLeave }: { placements: FinalPlacement[]; lobby: Lobby; onLeave: () => Promise<void> }) {
+function FinalResultOverlay({ placements, lobby, onLeave }: { placements: FinalPlacement[]; lobby: Lobby; onLeave: () => Promise<boolean> }) {
   return <div className="game-result-overlay final-result"><section className="surface result-panel"><div><p className="overline">Alle sieben Phasen gespielt</p><h2>Partie beendet</h2></div><div className="result-table">{placements.map((placement) => <div className={`result-row placement-${placement.rank}`} key={placement.userId}><strong>#{placement.rank} {playerName(lobby, placement.userId)}</strong><b>{placement.totalPenalty} Punkte</b></div>)}</div><button className="button-primary" onClick={() => void onLeave()}>Zur Lobbyliste</button></section></div>;
 }
 
@@ -929,7 +997,6 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
   const [error, setError] = useState("");
   const [profile, setProfile] = useState<ProfileStatistics | null>(null);
   const [treeOpen, setTreeOpen] = useState(false);
-  const [audioStatus, setAudioStatus] = useState("Gespeichert");
   const saveAudioTimer = useRef<number | null>(null);
   const pendingAudio = useRef(preferences);
   const audioDirty = useRef(false);
@@ -969,7 +1036,6 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
     pendingAudio.current = next;
     audioDirty.current = true;
     setPreferences(next);
-    setAudioStatus("Speichert …");
     if (saveAudioTimer.current !== null) window.clearTimeout(saveAudioTimer.current);
     saveAudioTimer.current = window.setTimeout(async () => {
       const submitted = pendingAudio.current;
@@ -978,12 +1044,11 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
         if (pendingAudio.current === submitted) {
           audioDirty.current = false;
           setPreferences(saved);
-          setAudioStatus("Gespeichert");
         }
-      } catch (reason) { setAudioStatus("Nicht gespeichert"); setError(message(reason)); playAudio("error"); }
+      } catch (reason) { setError(message(reason)); playAudio("error"); }
     }, 320);
   };
-  const setAudioLevel = (key: "master" | "music" | "ui" | "game", value: number) => queueAudioSave({ ...pendingAudio.current, [key]: value });
+  const setAudioLevel = (key: "music" | "effects", value: number) => queueAudioSave({ ...pendingAudio.current, [key]: value });
   const toggleMute = () => {
     const next = { ...pendingAudio.current, muted: !pendingAudio.current.muted };
     queueAudioSave(next);
@@ -992,8 +1057,8 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
   const displayed = profile?.user ?? (viewer.id === userId ? viewer : { id: userId, username: "Spieler", avatarKey: null });
   const editable = viewer.id === userId;
   const avatar = preview ? <img src={preview} alt="Neue Profilbild-Vorschau" /> : <Avatar user={displayed} large />;
-  const audioLevels: Array<{ key: "master" | "music" | "ui" | "game"; label: string }> = [
-    { key: "master", label: "Gesamt" }, { key: "music", label: "Musik" }, { key: "ui", label: "UI" }, { key: "game", label: "Spiel" }
+  const audioLevels: Array<{ key: "music" | "effects"; label: string }> = [
+    { key: "music", label: "Musik" }, { key: "effects", label: "Soundeffekte" }
   ];
   return <div className="dialog-backdrop">
     <section className="surface dialog profile-dialog">
@@ -1005,7 +1070,6 @@ function ProfileDialog({ viewer, userId, onUser, onTutorial, onClose }: { viewer
       {editable && <section className={`profile-audio ${preferences.muted ? "is-muted" : ""}`} aria-labelledby="audio-settings-title">
         <div className="profile-audio-title"><div><p className="overline">Sound & Musik</p><h3 id="audio-settings-title">Audio-Mix</h3></div><button type="button" className={`audio-mute ${preferences.muted ? "is-active" : ""}`} data-audio="silent" aria-pressed={preferences.muted} onClick={toggleMute}>{preferences.muted ? "Ton einschalten" : "Stummschalten"}</button></div>
         <div className="audio-levels">{audioLevels.map(({ key, label }) => <label className="audio-level" key={key}><span>{label}<output>{preferences[key]}%</output></span><input data-audio="silent" type="range" min="0" max="100" step="1" value={preferences[key]} onInput={(event) => setAudioLevel(key, Number(event.currentTarget.value))} aria-label={`${label}-Lautstärke`} /></label>)}</div>
-        <p className="audio-status" aria-live="polite"><span className="audio-pulse" aria-hidden="true" />{audioStatus}</p>
       </section>}
       {profile && <div className="profile-actions"><button className="button achievements-open" data-audio="open" onClick={() => setTreeOpen(true)}><span aria-hidden="true">✦</span> Erfolgsbaum ansehen<small>{profile.tree.flatMap((branch) => branch.nodes).filter((node) => node.unlocked).length} / {profile.tree.flatMap((branch) => branch.nodes).length} freigeschaltet</small></button>{editable && <button className="button" data-audio="open" onClick={onTutorial}>Kurzanleitung</button>}</div>}
       {error && <p className="error" role="alert">{error}</p>}

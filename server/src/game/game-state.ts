@@ -74,6 +74,7 @@ export interface PlayerGameView {
   melds: GameMeld[];
   roundEndedById: string | null;
   lastRoundResult: RoundResult | null;
+  roundResults: RoundResult[];
   placements: FinalPlacement[];
   recentActions: RecentGameAction[];
   players: Array<{ userId: string; handCount: number; coins: number; phaseLaid: boolean; totalPenalty: number; timeouts: number; disconnectSkips: number }>;
@@ -154,6 +155,7 @@ export function toPlayerGameView(rawState: GameState, viewerId: string, now = Da
     melds: state.melds,
     roundEndedById: state.roundEndedById,
     lastRoundResult: state.roundResults.at(-1) ?? null,
+    roundResults: state.roundResults,
     placements: state.placements,
     recentActions: state.recentActions.map(publicRecentAction),
     players: state.players.map((player) => ({ userId: player.userId, handCount: player.hand.length, coins: player.coins, phaseLaid: player.phaseLaid, totalPenalty: player.totalPenalty, timeouts: player.timeouts, disconnectSkips: player.disconnectSkips })),

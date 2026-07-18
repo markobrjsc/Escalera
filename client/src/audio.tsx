@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-export type AudioPreferences = { master: number; music: number; ui: number; game: number; muted: boolean };
+export type AudioPreferences = { music: number; effects: number; muted: boolean };
 export type AudioScene = "silent" | "menu" | "lobby" | "game" | "results";
 export type AudioCue =
   | "click" | "icon" | "cardSelect" | "open" | "close" | "scene" | "success" | "error"
@@ -13,23 +13,25 @@ export type AudioCue =
 
 export type PlayAudioOptions = { dedupeKey?: string; intensity?: number; variant?: number };
 
-export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = { master: 72, music: 34, ui: 64, game: 76, muted: false };
+export const DEFAULT_AUDIO_PREFERENCES: AudioPreferences = { music: 60, effects: 72, muted: false };
 const AUDIO_STORAGE_KEY = "escalera-audio-preferences-v1";
 
-const UI_CUES = new Set<AudioCue>(["click", "icon", "cardSelect", "open", "close", "scene", "success", "error", "login", "register", "lobbyCreate", "lobbyJoin", "playerJoin", "ready", "unready", "achievement", "connection", "disconnect"]);
-const CUES = new Set<AudioCue>([...UI_CUES, "gameStart", "deckDrop", "shuffle", "deal", "draw", "buy", "flip", "discard", "dragStart", "dropValid", "dropInvalid", "meld", "meldAdd", "merge", "turn", "warning", "timeout", "roundWin", "roundLose", "gameWin", "gameLose"]);
+const CUES = new Set<AudioCue>(["click", "icon", "cardSelect", "open", "close", "scene", "success", "error", "login", "register", "lobbyCreate", "lobbyJoin", "playerJoin", "ready", "unready", "achievement", "connection", "disconnect", "gameStart", "deckDrop", "shuffle", "deal", "draw", "buy", "flip", "discard", "dragStart", "dropValid", "dropInvalid", "meld", "meldAdd", "merge", "turn", "warning", "timeout", "roundWin", "roundLose", "gameWin", "gameLose"]);
 
 function clampPercent(value: unknown, fallback: number) {
   const numeric = typeof value === "number" ? value : Number(value);
   return Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric))) : fallback;
 }
 
-export function normalizeAudioPreferences(value: Partial<AudioPreferences> | null | undefined): AudioPreferences {
+type LegacyAudioPreferences = { master?: number; ui?: number; game?: number };
+
+export function normalizeAudioPreferences(value: (Partial<AudioPreferences> & LegacyAudioPreferences) | null | undefined): AudioPreferences {
+  const legacyEffects = value?.ui !== undefined || value?.game !== undefined
+    ? (clampPercent(value?.ui, 64) + clampPercent(value?.game, 76)) / 2
+    : undefined;
   return {
-    master: clampPercent(value?.master, DEFAULT_AUDIO_PREFERENCES.master),
     music: clampPercent(value?.music, DEFAULT_AUDIO_PREFERENCES.music),
-    ui: clampPercent(value?.ui, DEFAULT_AUDIO_PREFERENCES.ui),
-    game: clampPercent(value?.game, DEFAULT_AUDIO_PREFERENCES.game),
+    effects: clampPercent(value?.effects ?? legacyEffects, DEFAULT_AUDIO_PREFERENCES.effects),
     muted: typeof value?.muted === "boolean" ? value.muted : DEFAULT_AUDIO_PREFERENCES.muted
   };
 }
@@ -51,8 +53,8 @@ export function audioCueForGameAction(type: string, merged = false): AudioCue | 
   return null;
 }
 
-export function audioCueCategory(cue: AudioCue): "ui" | "game" {
-  return UI_CUES.has(cue) ? "ui" : "game";
+export function audioCueCategory(_cue: AudioCue): "effects" {
+  return "effects";
 }
 
 type WebkitWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
@@ -62,8 +64,7 @@ class AudioDirector {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private musicBus: GainNode | null = null;
-  private uiBus: GainNode | null = null;
-  private gameBus: GainNode | null = null;
+  private effectsBus: GainNode | null = null;
   private limiter: DynamicsCompressorNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private preferences: AudioPreferences;
@@ -87,8 +88,7 @@ class AudioDirector {
       this.context = context;
       this.master = context.createGain();
       this.musicBus = context.createGain();
-      this.uiBus = context.createGain();
-      this.gameBus = context.createGain();
+      this.effectsBus = context.createGain();
       this.limiter = context.createDynamicsCompressor();
       this.limiter.threshold.value = -8;
       this.limiter.knee.value = 16;
@@ -96,8 +96,7 @@ class AudioDirector {
       this.limiter.attack.value = .004;
       this.limiter.release.value = .18;
       this.musicBus.connect(this.master);
-      this.uiBus.connect(this.master);
-      this.gameBus.connect(this.master);
+      this.effectsBus.connect(this.master);
       this.master.connect(this.limiter).connect(context.destination);
       this.noiseBuffer = this.makeNoiseBuffer(context);
       this.applyPreferences(true);
@@ -154,13 +153,12 @@ class AudioDirector {
 
   private applyPreferences(immediate: boolean) {
     const context = this.context;
-    if (!context || !this.master || !this.musicBus || !this.uiBus || !this.gameBus) return;
+    if (!context || !this.master || !this.musicBus || !this.effectsBus) return;
     const at = context.currentTime;
     const values: Array<[AudioParam, number]> = [
-      [this.master.gain, this.preferences.muted ? 0 : this.preferences.master / 100],
+      [this.master.gain, this.preferences.muted ? 0 : 1],
       [this.musicBus.gain, this.preferences.music / 100],
-      [this.uiBus.gain, this.preferences.ui / 100],
-      [this.gameBus.gain, this.preferences.game / 100]
+      [this.effectsBus.gain, this.preferences.effects / 100]
     ];
     for (const [parameter, value] of values) {
       parameter.cancelScheduledValues(at);
@@ -181,8 +179,8 @@ class AudioDirector {
     return buffer;
   }
 
-  private output(category: "ui" | "game") {
-    return category === "ui" ? this.uiBus : this.gameBus;
+  private output() {
+    return this.effectsBus;
   }
 
   private tone(frequency: number, start: number, duration: number, amplitude: number, type: OscillatorType, destination: AudioNode, toFrequency?: number, attack = .008, release = .08) {
@@ -238,8 +236,7 @@ class AudioDirector {
   private synth(cue: AudioCue, intensity: number, variant: number) {
     const context = this.context; if (!context) return;
     const at = context.currentTime + .008;
-    const category = audioCueCategory(cue);
-    const output = this.output(category); if (!output) return;
+    const output = this.output(); if (!output) return;
     const gain = intensity;
     switch (cue) {
       case "click": this.tone(460, at, .045, .035 * gain, "triangle", output, 590, .003, .025); break;
@@ -290,7 +287,10 @@ class AudioDirector {
     this.track = null;
     if (scene === "silent") return;
     const settings: Record<Exclude<AudioScene, "silent">, { bar: number; gain: number }> = {
-      menu: { bar: 3.75, gain: .16 }, lobby: { bar: 3.2, gain: .17 }, game: { bar: 2.72, gain: .13 }, results: { bar: 4, gain: .15 }
+      // The music synth has many deliberately soft voices. Its scene envelope
+      // therefore needs substantially more headroom than one-shot effects; the
+      // downstream compressor still catches summed peaks at 100% volume.
+      menu: { bar: 3.75, gain: .72 }, lobby: { bar: 3.2, gain: .81 }, game: { bar: 2.72, gain: .66 }, results: { bar: 4, gain: .75 }
     };
     const gain = context.createGain();
     gain.gain.setValueAtTime(.0001, context.currentTime);
