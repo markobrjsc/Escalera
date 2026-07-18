@@ -72,9 +72,9 @@
    Zielgröße, das innere ist doppelseitig und flippt im konfigurierten Fenster
    des Flugs (fx.tsx steuert beides per WAAPI). */
 .fx-layer { position: fixed; inset: 0; z-index: 88; overflow: hidden; pointer-events: none; perspective: 1300px; }
-.fx-flight { position: absolute; left: 0; top: 0; transform-origin: top left; will-change: transform; filter: drop-shadow(0 .35rem .5rem #0009); }
+.fx-flight { position: absolute; left: 0; top: 0; aspect-ratio: 5 / 7; overflow: visible; transform-origin: top left; will-change: transform; filter: drop-shadow(0 .35rem .5rem #0009); }
 .fx-flight-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; will-change: transform; }
-.fx-face { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 5%; backface-visibility: hidden; }
+.fx-face { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 5%; backface-visibility: hidden; }
 .fx-back { transform: rotateY(180deg); }
 
 /* Ankommende Karten existieren schon im Layout, bleiben aber unsichtbar, bis
@@ -85,10 +85,10 @@
    riffle-mischt dreimal und klopft sich zurecht (DEAL_TIMING.shuffle). Während
    der Bühne versteckt .is-staging den echten Stapel darunter. */
 .deal-stage { position: fixed; inset: 0; z-index: 86; pointer-events: none; perspective: 1300px; }
-.deal-deck, .deal-half { position: fixed; }
+.deal-deck, .deal-half { position: fixed; aspect-ratio: 5 / 7; }
 /* Das Deck liegt geneigt wie der Stapel darunter (BOARD_TILT), damit die
    Übergabe an den echten Ziehstapel nahtlos ist. */
-.deal-deck img, .deal-half img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 5%; box-shadow: 0 .4rem 1rem #000c; transform: rotateX(22deg); }
+.deal-deck img, .deal-half img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 5%; box-shadow: 0 .4rem 1rem #000c; }
 .deal-stage[data-stage="drop"] .deal-deck { animation: deck-drop .75s cubic-bezier(.3,.7,.3,1) both; }
 .deal-stage[data-stage="shuffle"] .deal-deck { animation: deck-wait 1.8s steps(1, end) both, deck-square .45s cubic-bezier(.3,.7,.3,1.2) 1.8s both; }
 .deal-half { z-index: 2; }

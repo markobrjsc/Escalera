@@ -149,7 +149,7 @@ export function toPlayerGameView(rawState: GameState, viewerId: string, now = Da
     drawPileCount: state.drawPile.length,
     discardTop: state.discardPile.at(-1) ?? null,
     discardPileCount: state.discardPile.length,
-    discardOffer: state.discardOffer && viewerId !== state.activePlayerId && viewerId !== state.discardOffer.offeredById ? { available: true, cardId: state.discardOffer.cardId } : null,
+    discardOffer: state.discardOffer && viewerId !== state.activePlayerId ? { available: true, cardId: state.discardOffer.cardId } : null,
     turn: { hasDrawn: state.turn.hasDrawn, canAct: viewerId === state.activePlayerId && !state.roundEndedById && turnHasOpened(state.turn, now), opensAt: state.turn.opensAt, deadlineAt: state.turn.deadlineAt },
     melds: state.melds,
     roundEndedById: state.roundEndedById,

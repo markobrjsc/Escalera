@@ -14,11 +14,11 @@ function harness(state: GameState) {
       version += 1;
       return { count: 1 };
     })
-  } };
+  }, $transaction: async <T>(operation: (tx: { game: typeof prisma.game }) => Promise<T>) => operation({ game: prisma.game }) };
   const service = new GamesService(
     prisma as never,
     { finish: vi.fn() } as never,
-    { recordFinishedGame: vi.fn(), recordPhaseWin: vi.fn() } as never
+    { recordFinishedGame: vi.fn(), recordPhaseWin: vi.fn(), recordGameProgress: vi.fn() } as never
   );
   return { service, prisma, game };
 }

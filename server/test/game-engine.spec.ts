@@ -53,6 +53,16 @@ describe("autoritärer Spielzug", () => {
     expect(result.melds[0].cards).toHaveLength(4);
   });
 
+  it("führt neu ausgelegte Gruppen desselben Werts in die bestehende Meld zusammen", () => {
+    const drawn = drawCard(baseState(), "p1", "draw");
+    const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
+    const armed = { ...phased, players: phased.players.map((player) => player.userId === "p1" ? { ...player, hand: [card("5a", "5"), card("5b", "5", "hearts"), card("5d", "5", "spades"), card("keep", "7")] } : player) };
+    const merged = layAdditionalMeld(armed, "p1", ["5a", "5b", "5d"], false);
+    expect(merged.melds).toHaveLength(1);
+    expect(merged.melds[0].cards).toHaveLength(6);
+    expect(merged.melds[0].id).toBe(phased.melds[0].id);
+  });
+
   it("beendet die Runde, wenn ein Spieler durch Auslegen seine letzte Karte loswird", () => {
     const drawn = drawCard(baseState(), "p1", "draw");
     const phased = layPhase(drawn, "p1", [["5c", "5h", "5s"]]);
@@ -80,10 +90,10 @@ describe("autoritärer Spielzug", () => {
     const discarded = discardCard(drawn, "p1", "7c");
     expect(discarded.activePlayerId).toBe("p2");
     expect(discarded.discardOffer?.cardId).toBe("7c");
-    const bought = buyDiscard(discarded, "p3");
-    expect(bought.players[2].coins).toBe(6);
-    expect(bought.players[2].hand.some((entry) => entry.id === "7c")).toBe(true);
-    expect(() => buyDiscard(bought, "p3")).toThrow("nicht mehr zum Kauf");
+    const bought = buyDiscard(discarded, "p1");
+    expect(bought.players[0].coins).toBe(6);
+    expect(bought.players[0].hand.some((entry) => entry.id === "7c")).toBe(true);
+    expect(() => buyDiscard(bought, "p1")).toThrow("nicht mehr zum Kauf");
   });
 
   it("verändert bei einer ungültigen Aktion nicht den übergebenen Zustand", () => {

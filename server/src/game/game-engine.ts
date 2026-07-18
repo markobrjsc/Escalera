@@ -35,6 +35,25 @@ function removeCards(hand: GameCard[], cards: readonly GameCard[]) {
   return hand.filter((card) => !ids.has(card.id));
 }
 
+function groupValue(cards: readonly GameCard[]) {
+  const ranks = [...new Set(cards.filter((card): card is Extract<GameCard, { kind: "standard" }> => card.kind === "standard").map((card) => card.rank))];
+  return ranks.length === 1 ? ranks[0] : null;
+}
+
+// Groups of the same value share one stable meld id. Besides producing a much
+// cleaner board this lets the client animate new cards into the existing meld.
+function addOrMergeMeld(state: GameState, ownerId: string, type: "group" | "street", cards: GameCard[], sameSuit: boolean) {
+  const value = type === "group" ? groupValue(cards) : null;
+  const existing = value ? state.melds.find((meld) => meld.type === "group" && groupValue(meld.cards) === value) : undefined;
+  if (existing) {
+    existing.cards.push(...cards);
+    return existing;
+  }
+  const meld = { id: randomUUID(), ownerId, type, cards, sameSuit };
+  state.melds.push(meld);
+  return meld;
+}
+
 function validationError(reason?: string): never {
   throw new GameActionError(reason ?? "Diese Kombination ist ungültig.");
 }
@@ -79,7 +98,7 @@ export function layPhase(rawState: GameState, userId: string, combinationCardIds
   current.metrics.phasesLaid += 1;
   current.metrics.meldsLaid += combinations.length;
   current.metrics.jokersPlayed += combinations.flat().filter((card) => card.kind === "joker").length;
-  for (const cards of combinations) state.melds.push({ id: randomUUID(), ownerId: userId, type: state.phase === 7 ? "street" : "group", cards, sameSuit: state.phase === 7 });
+  for (const cards of combinations) addOrMergeMeld(state, userId, state.phase === 7 ? "street" : "group", cards, state.phase === 7);
   if (state.phase === 7) for (const cards of combinations) trackStreet(current, "street", cards.length);
   // Laying the final card ends the round just like discarding the last one would.
   if (!current.hand.length) return completeRound(state, userId, random, now);
@@ -104,7 +123,7 @@ export function layAdditionalMeld(rawState: GameState, userId: string, cardIds: 
   current.hand = removeCards(current.hand, cards);
   current.metrics.meldsLaid += 1;
   current.metrics.jokersPlayed += cards.filter((card) => card.kind === "joker").length;
-  state.melds.push({ id: randomUUID(), ownerId: userId, type: group.valid ? "group" : "street", cards, sameSuit: group.valid ? false : streetsRequireSameSuit });
+  addOrMergeMeld(state, userId, group.valid ? "group" : "street", cards, group.valid ? false : streetsRequireSameSuit);
   trackStreet(current, group.valid ? "group" : "street", cards.length);
   if (!current.hand.length) return completeRound(state, userId, random, now);
   return state;
@@ -216,7 +235,7 @@ export function buyDiscard(rawState: GameState, userId: string) {
   if (state.status === "FINISHED") throw new GameActionError("Die Partie ist bereits beendet.");
   if (state.roundEndedById) throw new GameActionError("Die Runde ist bereits beendet.");
   if (!state.discardOffer) throw new GameActionError("Diese Karte steht nicht mehr zum Kauf.");
-  if (userId === state.activePlayerId || userId === state.discardOffer.offeredById) throw new GameActionError("Du kannst diese Karte gerade nicht kaufen.");
+  if (userId === state.activePlayerId) throw new GameActionError("Der aktive Spieler zieht die Karte regulär statt sie zu kaufen.");
   const buyer = player(state, userId);
   if (buyer.coins < 1) throw new GameActionError("Du hast keine Münze mehr.");
   const card = state.discardPile.at(-1);

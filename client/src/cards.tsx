@@ -38,7 +38,9 @@ export function PileStack({ count, top, kind }: { count: number; top: Card | nul
   const visibleCount = Math.max(count, top ? 1 : 0);
   const capacity = kind === "draw" ? 108 : 60;
   const fill = Math.min(1, Math.sqrt(visibleCount / capacity));
-  const layers = Math.min(visibleCount - 1, Math.max(Math.min(3, visibleCount - 1), Math.ceil(fill * 6)));
+  // A draw deck is one squared, solid object. Showing several complete backs
+  // beneath it reads as duplicate cards rather than a clean card edge.
+  const layers = kind === "draw" ? 0 : Math.min(visibleCount - 1, Math.max(Math.min(3, visibleCount - 1), Math.ceil(fill * 6)));
   const messy = kind === "discard";
   const firstVisible = visibleCount - layers - 1;
   return <span className={`pile-stack ${messy ? "is-messy" : "is-neat"}`} style={{ "--pile-depth": visibleCount, "--pile-fill": fill } as React.CSSProperties}>

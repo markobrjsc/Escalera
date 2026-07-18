@@ -20,6 +20,42 @@ function finishedGame() {
 }
 
 describe("dauerhafte Statistiken", () => {
+  it("speichert Fortschritt pro Aktion und schaltet Achievements sofort frei", async () => {
+    const before = createInitialGameState(["p1", "p2"], 1, () => 0);
+    const after = structuredClone(before);
+    after.players[0].metrics.movesPlayed = 50;
+    after.players[0].metrics.cardsBought = 5;
+
+    const created: { userId: string; achievement: string }[] = [];
+    const emptyStats = {
+      gamesPlayed: 0, gamesWon: 0, podiumFinishes: 0, totalPenalty: 0,
+      phasesLaid: 0, meldsLaid: 0, jokersPlayed: 0, cardsBought: 0,
+      timeouts: 0, reconnects: 0, movesPlayed: 0, coinPenalty: 0,
+      longestStreet: 0, phaseWinsMask: 0
+    };
+    const tx = {
+      userStatistic: {
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        findUniqueOrThrow: vi.fn(async (arg: { where: { userId: string } }) => arg.where.userId === "p1"
+          ? { ...emptyStats, cardsBought: 5, movesPlayed: 50 }
+          : emptyStats)
+      },
+      achievementProgress: {
+        findMany: vi.fn(async () => []),
+        createMany: vi.fn(async (arg: { data: { userId: string; achievement: string }[] }) => created.push(...arg.data))
+      }
+    };
+
+    await new StatisticsService({} as never).recordGameProgress(tx as never, before, after);
+
+    expect(tx.userStatistic.upsert.mock.calls[0][0].create).toMatchObject({ userId: "p1", cardsBought: 5, movesPlayed: 50 });
+    expect(created).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: "p1", achievement: "market:5" }),
+      expect.objectContaining({ userId: "p1", achievement: "moves:50" })
+    ]));
+  });
+
   it("rollt neue Metriken korrekt auf (Münz-Strafe, Züge, Straßenlänge, Phasen-Bitmaske)", async () => {
     const tx = {
       gameStatisticsRollup: { create: vi.fn() },
