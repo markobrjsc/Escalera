@@ -7,6 +7,7 @@ import { PrismaService } from "../prisma.service.js";
 import { CreateLobbyDto } from "./lobby.dto.js";
 import { PresenceService } from "../realtime/presence.service.js";
 import { LobbyLifecycleService } from "./lobby-lifecycle.service.js";
+import { StatisticsService } from "../profiles/statistics.service.js";
 
 const lobbyInclude = {
   host: { select: { id: true, username: true, avatarKey: true } },
@@ -16,7 +17,12 @@ const lobbyInclude = {
 
 @Injectable()
 export class LobbiesService {
-  constructor(private readonly prisma: PrismaService, private readonly presence: PresenceService, private readonly lifecycle: LobbyLifecycleService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly presence: PresenceService,
+    private readonly lifecycle: LobbyLifecycleService,
+    private readonly statistics: StatisticsService
+  ) {}
 
   async create(userId: string, input: CreateLobbyDto) {
     await this.assertNoOtherLobby(userId);
@@ -110,6 +116,7 @@ export class LobbiesService {
       const updated = await transaction.lobby.updateMany({ where: { id: lobby.id, status: "OPEN" }, data: { status: "ACTIVE" } });
       if (updated.count !== 1) return;
       await transaction.game.create({ data: { lobbyId: lobby.id, state: state as unknown as Prisma.InputJsonValue } });
+      await this.statistics.recordGameStarted(transaction, lobby.players.map((player) => player.userId));
     });
   }
 
