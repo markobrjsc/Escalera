@@ -732,14 +732,14 @@ function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, on
     <p className="turn-hint" aria-live="polite">{hint}</p>
     <section className="game-board">
       <div className="pile-station">
-        <div className={`pile-slot ${zoneClass("draw")}`}><button ref={anchor("draw")} className="game-pile draw-pile" data-zone="draw" aria-label={`Vom Stapel ziehen, ${shownDraw} Karten verbleiben`} disabled={!canDraw} onClick={() => runZone("draw")}><PileStack count={shownDraw} top={null} kind="draw" /></button></div>
+        <div className={`pile-slot ${zoneClass("draw")}`} data-zone="draw" onClick={() => runZone("draw")}><button ref={anchor("draw")} className="game-pile draw-pile" aria-label={`Vom Stapel ziehen, ${shownDraw} Karten verbleiben`} disabled={!canDraw}><PileStack count={shownDraw} top={null} kind="draw" /></button></div>
         <span>Ziehstapel <b>[ {shownDraw} ]</b></span>
       </div>
       <div className={`meld-zone ${zoneClass("meldzone")}`} ref={anchor("meldzone")} data-zone="meldzone" onClick={() => canLay && runZone("meldzone")}>
         {game.state.melds.length ? game.state.melds.map((meld) => <article className={`meld-card ${openMelds.includes(meld.id) ? "is-target" : ""}`} data-zone={`meld:${meld.id}`} ref={anchor(`meld:${meld.id}`)} onClick={(event) => { event.stopPropagation(); runZone(`meld:${meld.id}`); }} key={meld.id} aria-label={`${meld.type === "group" ? "Gruppe" : "Straße"}: ${meld.cards.map(cardLabel).join(", ")}`}><div className="meld-cards" style={{ "--meld-count": meld.cards.length } as React.CSSProperties}>{meld.cards.map((card) => <CardFace card={card} fxId={card.id} incoming={!!arrivals[card.id]} key={card.id} />)}</div></article>) : <div className="empty-meld"><span className="empty-meld-icon">◇</span><strong>Meld-Zone</strong><span>Gruppen und Straßen erscheinen hier</span></div>}
       </div>
       <div className="pile-station">
-        <div className={`pile-slot ${zoneClass("discard")}`}><button ref={anchor("discard")} className="game-pile discard-pile" data-zone="discard" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : shownDiscard.top ? `${cardLabel(shownDiscard.top)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)} onClick={() => runZone("discard")}><PileStack count={shownDiscard.count} top={shownDiscard.top} kind="discard" /></button></div>
+        <div className={`pile-slot ${zoneClass("discard")}`} data-zone="discard" onClick={() => runZone("discard")}><button ref={anchor("discard")} className="game-pile discard-pile" aria-label={canDiscard ? "Ausgewählte Karte ablegen" : shownDiscard.top ? `${cardLabel(shownDiscard.top)} von der Ablage ziehen` : "Ablage ist leer"} disabled={!canDiscard && !(canDraw && game.state.discardTop)}><PileStack count={shownDiscard.count} top={shownDiscard.top} kind="discard" /></button></div>
         <span>Ablage <b>[ {shownDiscard.count} ]</b></span>
         {game.state.discardOffer?.available && <button className="buy-button is-available" disabled={!canBuy} onClick={() => void act("buy")}>Ablage kaufen · 1 Münze</button>}
       </div>
