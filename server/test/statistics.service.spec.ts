@@ -20,6 +20,22 @@ function finishedGame() {
 }
 
 describe("dauerhafte Statistiken", () => {
+  it("zählt jedes Spiel beim Start genau einmal für alle Teilnehmer", async () => {
+    const tx = { userStatistic: { upsert: vi.fn() } };
+    await new StatisticsService({} as never).recordGameStarted(tx as never, ["p1", "p2"]);
+
+    expect(tx.userStatistic.upsert).toHaveBeenCalledTimes(2);
+    expect(tx.userStatistic.upsert).toHaveBeenNthCalledWith(1, {
+      where: { userId: "p1" },
+      create: { userId: "p1", gamesPlayed: 1 },
+      update: { gamesPlayed: { increment: 1 } }
+    });
+    expect(tx.userStatistic.upsert).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: { userId: "p2" },
+      create: { userId: "p2", gamesPlayed: 1 }
+    }));
+  });
+
   it("speichert Fortschritt pro Aktion und schaltet Achievements sofort frei", async () => {
     const before = createInitialGameState(["p1", "p2"], 1, () => 0);
     const after = structuredClone(before);
@@ -66,7 +82,9 @@ describe("dauerhafte Statistiken", () => {
 
     await expect(new StatisticsService(prisma as never).recordFinishedGame("g1", finishedGame())).resolves.toBe(true);
     const p1 = tx.userStatistic.upsert.mock.calls[0][0];
-    expect(p1.create).toMatchObject({ gamesPlayed: 1, gamesWon: 1, movesPlayed: 60, coinPenalty: 120, longestStreet: 9 });
+    expect(p1.create).toMatchObject({ gamesWon: 1, movesPlayed: 60, coinPenalty: 120, longestStreet: 9 });
+    expect(p1.create).not.toHaveProperty("gamesPlayed");
+    expect(p1.update).not.toHaveProperty("gamesPlayed");
     expect(p1.create.phaseWinsMask).toBe(0b0001011); // phases 1, 2, 4
   });
 

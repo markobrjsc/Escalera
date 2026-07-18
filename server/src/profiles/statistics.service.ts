@@ -48,6 +48,19 @@ function unlockedIds(stats: StatBag): string[] {
 export class StatisticsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // The OPEN -> ACTIVE compare-and-set in LobbiesService is the idempotency
+  // boundary. Keeping this increment in the same transaction means a game and
+  // all participant counters either start together or not at all.
+  async recordGameStarted(tx: Prisma.TransactionClient, playerIds: string[]) {
+    for (const userId of playerIds) {
+      await tx.userStatistic.upsert({
+        where: { userId },
+        create: { userId, gamesPlayed: 1 },
+        update: { gamesPlayed: { increment: 1 } }
+      });
+    }
+  }
+
   // Persist one accepted state transition inside the same transaction as the
   // game version. Deltas make retries idempotent and profiles update live.
   async recordGameProgress(tx: Prisma.TransactionClient, before: GameState, after: GameState) {
@@ -61,7 +74,6 @@ export class StatisticsService {
       const finished = before.status !== "FINISHED" && after.status === "FINISHED";
       const placement = after.placements.find((entry) => entry.userId === player.userId)?.rank ?? 99;
       const values = {
-        gamesPlayed: finished ? 1 : 0,
         gamesWon: finished && placement === 1 ? 1 : 0,
         podiumFinishes: finished && placement <= 3 ? 1 : 0,
         totalPenalty: player.totalPenalty - previous.totalPenalty,
@@ -78,7 +90,7 @@ export class StatisticsService {
       await tx.userStatistic.upsert({
         where: { userId: player.userId },
         create: { userId: player.userId, ...values, longestStreet, phaseWinsMask },
-        update: { gamesPlayed: { increment: values.gamesPlayed }, gamesWon: { increment: values.gamesWon }, podiumFinishes: { increment: values.podiumFinishes }, totalPenalty: { increment: values.totalPenalty }, phasesLaid: { increment: values.phasesLaid }, meldsLaid: { increment: values.meldsLaid }, jokersPlayed: { increment: values.jokersPlayed }, cardsBought: { increment: values.cardsBought }, timeouts: { increment: values.timeouts }, reconnects: { increment: values.reconnects }, movesPlayed: { increment: values.movesPlayed }, coinPenalty: { increment: values.coinPenalty }, longestStreet, phaseWinsMask }
+        update: { gamesWon: { increment: values.gamesWon }, podiumFinishes: { increment: values.podiumFinishes }, totalPenalty: { increment: values.totalPenalty }, phasesLaid: { increment: values.phasesLaid }, meldsLaid: { increment: values.meldsLaid }, jokersPlayed: { increment: values.jokersPlayed }, cardsBought: { increment: values.cardsBought }, timeouts: { increment: values.timeouts }, reconnects: { increment: values.reconnects }, movesPlayed: { increment: values.movesPlayed }, coinPenalty: { increment: values.coinPenalty }, longestStreet, phaseWinsMask }
       });
       const stored = await tx.userStatistic.findUniqueOrThrow({ where: { userId: player.userId } });
       const already = new Set((await tx.achievementProgress.findMany({ where: { userId: player.userId }, select: { achievement: true } })).map((row) => row.achievement));
@@ -103,8 +115,8 @@ export class StatisticsService {
           };
           await tx.userStatistic.upsert({
             where: { userId: player.userId },
-            create: { userId: player.userId, gamesPlayed: 1, gamesWon: placement === 1 ? 1 : 0, podiumFinishes: placement <= 3 ? 1 : 0, totalPenalty: player.totalPenalty, phasesLaid: player.metrics.phasesLaid, meldsLaid: player.metrics.meldsLaid, jokersPlayed: player.metrics.jokersPlayed, cardsBought: player.metrics.cardsBought, timeouts: player.timeouts, reconnects: player.disconnectSkips, movesPlayed: player.metrics.movesPlayed, coinPenalty: player.coins * COIN_PENALTY, ...merged },
-            update: { gamesPlayed: { increment: 1 }, gamesWon: { increment: placement === 1 ? 1 : 0 }, podiumFinishes: { increment: placement <= 3 ? 1 : 0 }, totalPenalty: { increment: player.totalPenalty }, phasesLaid: { increment: player.metrics.phasesLaid }, meldsLaid: { increment: player.metrics.meldsLaid }, jokersPlayed: { increment: player.metrics.jokersPlayed }, cardsBought: { increment: player.metrics.cardsBought }, timeouts: { increment: player.timeouts }, reconnects: { increment: player.disconnectSkips }, movesPlayed: { increment: player.metrics.movesPlayed }, coinPenalty: { increment: player.coins * COIN_PENALTY }, ...merged }
+            create: { userId: player.userId, gamesWon: placement === 1 ? 1 : 0, podiumFinishes: placement <= 3 ? 1 : 0, totalPenalty: player.totalPenalty, phasesLaid: player.metrics.phasesLaid, meldsLaid: player.metrics.meldsLaid, jokersPlayed: player.metrics.jokersPlayed, cardsBought: player.metrics.cardsBought, timeouts: player.timeouts, reconnects: player.disconnectSkips, movesPlayed: player.metrics.movesPlayed, coinPenalty: player.coins * COIN_PENALTY, ...merged },
+            update: { gamesWon: { increment: placement === 1 ? 1 : 0 }, podiumFinishes: { increment: placement <= 3 ? 1 : 0 }, totalPenalty: { increment: player.totalPenalty }, phasesLaid: { increment: player.metrics.phasesLaid }, meldsLaid: { increment: player.metrics.meldsLaid }, jokersPlayed: { increment: player.metrics.jokersPlayed }, cardsBought: { increment: player.metrics.cardsBought }, timeouts: { increment: player.timeouts }, reconnects: { increment: player.disconnectSkips }, movesPlayed: { increment: player.metrics.movesPlayed }, coinPenalty: { increment: player.coins * COIN_PENALTY }, ...merged }
           });
 
           const after = await tx.userStatistic.findUniqueOrThrow({ where: { userId: player.userId } });
