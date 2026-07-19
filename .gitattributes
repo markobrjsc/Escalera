@@ -1,0 +1,4 @@
+# Deployment-Artefakte muessen auf dem Linux-Server LF-Zeilenenden behalten,
+# sonst schlaegt die Ausfuehrung des Shell-Skripts fehl.
+*.sh text eol=lf
+.github/workflows/*.yml text eol=lf

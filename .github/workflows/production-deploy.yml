@@ -1,0 +1,131 @@
+name: Production deployment
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Tests and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=@escalera/server
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run type checks
+        run: npm run typecheck
+
+      - name: Build production artifacts
+        run: npm run build
+
+  deploy:
+    name: Deploy production
+    needs: quality
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    concurrency:
+      group: escalera-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
+      DEPLOY_USER: ${{ vars.PRODUCTION_USER }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Validate deployment configuration
+        env:
+          SSH_KEY_B64: ${{ secrets.PRODUCTION_SSH_KEY_B64 }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$PRODUCTION_URL"
+          test -n "$SSH_KEY_B64"
+          test -n "$KNOWN_HOSTS"
+
+      - name: Create revision-pinned release
+        id: release
+        run: |
+          archive="escalera-release-$GITHUB_SHA.tar.gz"
+          git archive --format=tar.gz --output="$archive" "$GITHUB_SHA"
+          archive_sha=$(sha256sum "$archive" | awk '{print $1}')
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "archive_sha=$archive_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Configure pinned SSH host
+        env:
+          SSH_KEY_B64: ${{ secrets.PRODUCTION_SSH_KEY_B64 }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 /dev/null "$HOME/.ssh/id_ed25519"
+          printf '%s' "$SSH_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Upload release
+        env:
+          ARCHIVE: ${{ steps.release.outputs.archive }}
+        run: |
+          scp -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$ARCHIVE" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/$ARCHIVE"
+          scp -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            infrastructure/scripts/deploy-release.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/escalera-deploy-release-$GITHUB_SHA.sh"
+
+      - name: Deploy and verify
+        env:
+          ARCHIVE: ${{ steps.release.outputs.archive }}
+          ARCHIVE_SHA: ${{ steps.release.outputs.archive_sha }}
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sh '/tmp/escalera-deploy-release-$GITHUB_SHA.sh' '/tmp/$ARCHIVE' '$GITHUB_SHA' '$ARCHIVE_SHA'"
+          curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 \
+            "$PRODUCTION_URL/api/health"
+
+      - name: Publish deployment summary
+        if: success()
+        run: |
+          {
+            echo "## Production deployment"
+            echo
+            echo "- Revision: $GITHUB_SHA"
+            echo "- URL: $PRODUCTION_URL"
+            echo "- Health check: successful"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove runner SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_ed25519"
