@@ -21,6 +21,7 @@ Die Dokumentation wird unabhängig von einer früheren technischen Umsetzung ers
 - [Technical-Architecture.md](Technical-Architecture.md) – festgelegte technische Architektur
 - [Accounts-Profiles-and-Statistics.md](Accounts-Profiles-and-Statistics.md) – Konten, Profilbilder, Statistiken und Erfolge
 - [Docker-and-Deployment.md](Docker-and-Deployment.md) – Container, lokale Umgebung und Bereitstellung
+- [Automatic-Production-Deployment.md](Automatic-Production-Deployment.md) – automatisches, abgesichertes Deployment nach "main"
 - [Development-Workflow.md](Development-Workflow.md) – verbindliche Ticket-, Branch- und Commit-Arbeitsweise
 
 ## Statuskennzeichnungen
