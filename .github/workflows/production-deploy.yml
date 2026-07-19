@@ -30,6 +30,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=@escalera/server
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+
       - name: Run tests
         run: npm test
 
