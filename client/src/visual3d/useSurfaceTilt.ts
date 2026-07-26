@@ -9,7 +9,9 @@ export const SURFACE_TILT_SELECTOR = [
   ".dialog",
   ".game-menu",
   ".player-interaction-card",
-  ".result-panel",
+  // .result-panel is intentionally absent: it scrolls and holds the score
+  // history's sticky first/last columns, which mis-resolve while an ancestor is
+  // rotated inside a perspective. See the note in styles/depth-system.css.
   ".turn-order-player",
   ".active-player-hud",
   ".meld-card",
