@@ -13,6 +13,13 @@
 	background: var(--color-onyx);
 }
 
+.game-menu-title {
+	margin: 0;
+	font-size: clamp(2.75rem, 6vw, 5rem);
+	line-height: .9;
+	text-wrap: balance;
+}
+
 .leave-game {
 	align-self: end;
 }
