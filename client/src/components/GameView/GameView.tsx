@@ -18,7 +18,7 @@ import { Scoreboard } from "../results/Scoreboard/Scoreboard.js";
 import { RoundResultOverlay } from "../results/RoundResultOverlay/RoundResultOverlay.js";
 import { FinalResultOverlay } from "../results/FinalResultOverlay/FinalResultOverlay.js";
 import { GameHud } from "./GameHud/GameHud.js";
-import { BuyButton } from "./BuyButton/BuyButton.js";
+import { BuyButton, fitBuyButtonToDiscard, type BuyButtonPosition } from "./BuyButton/BuyButton.js";
 import { GameBoard } from "./GameBoard/GameBoard.js";
 import { PlayerHand } from "./PlayerHand/PlayerHand.js";
 import { DragGhost } from "./DragGhost/DragGhost.js";
@@ -38,7 +38,7 @@ export function GameView({ user, lobby, game, connected, introHold, onGame, onLe
   const leaveGate = useRef(false);
   const [drag, setDrag] = useState<{ cardId: string; x: number; y: number; zone: string | null } | null>(null);
   const [events, setEvents] = useState<Array<{ key: string; text: string }>>([]);
-  const [buyPosition, setBuyPosition] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [buyPosition, setBuyPosition] = useState<BuyButtonPosition | null>(null);
   const reduced = usePrefersReducedMotion();
   const anchors = useRef(new Map<string, HTMLElement>());
   const anchor: Anchor = useCallback((key: string) => (el: HTMLElement | null) => { if (el) anchors.current.set(key, el); else anchors.current.delete(key); }, []);
@@ -100,13 +100,9 @@ export function GameView({ user, lobby, game, connected, introHold, onGame, onLe
     const update = () => {
       const discard = rectOf("discard");
       if (!discard) return;
-      const viewportWidth = window.innerWidth;
-      const width = Math.min(Math.max(discard.width + 16, 144), viewportWidth - 16);
-      const gap = Math.max(8, discard.height * .05);
       const hudBottom = root.current?.querySelector(".game-hud")?.getBoundingClientRect().bottom ?? 0;
-      const left = Math.min(Math.max(discard.left + discard.width / 2 - width / 2, 8), viewportWidth - width - 8);
-      const top = Math.max(hudBottom + gap, discard.top - gap - 48);
-      setBuyPosition((current) => current && Math.abs(current.left - left) < .5 && Math.abs(current.top - top) < .5 && Math.abs(current.width - width) < .5 ? current : { left, top, width });
+      const next = fitBuyButtonToDiscard(discard, window.innerWidth, hudBottom);
+      setBuyPosition((current) => current && Math.abs(current.left - next.left) < .5 && Math.abs(current.top - next.top) < .5 && Math.abs(current.width - next.width) < .5 && Math.abs((current.height ?? 0) - (next.height ?? 0)) < .5 ? current : next);
     };
     update();
     const frame = window.requestAnimationFrame(update);
