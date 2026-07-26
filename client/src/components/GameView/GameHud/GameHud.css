@@ -36,7 +36,7 @@
 	grid-template-columns: auto auto minmax(0, 1fr);
 	align-items: center;
 	gap: calc(.5 * var(--u));
-	border: var(--hair) solid var(--color-muted);
+	border: 1px solid var(--color-muted);
 	border-radius: var(--radius-sm);
 	padding: calc(.3 * var(--u)) calc(.5 * var(--u));
 	font-size: var(--t-xs);
@@ -65,7 +65,7 @@
 	white-space: nowrap;
 }
 
-.turn-order-player > div span {
+.turn-order-player > div > .player-stat-labels {
 	color: var(--color-muted);
 	font-size: calc(1.15 * var(--fu));
 }
@@ -83,7 +83,7 @@
 	align-items: center;
 	justify-self: center;
 	gap: calc(1.1 * var(--u));
-	border: var(--line) solid var(--color-white);
+	border: 1px solid var(--color-white);
 	border-radius: var(--radius-sm);
 	padding: calc(.5 * var(--u)) calc(.9 * var(--u));
 }

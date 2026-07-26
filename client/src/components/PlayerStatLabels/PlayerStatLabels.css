@@ -1,1 +1,41 @@
-/* Player-stat styles remain in polish.css and GameHud.css. */
+.player-stat-labels {
+	display: flex !important;
+	align-items: center;
+	gap: calc(.34 * var(--u));
+	overflow: visible !important;
+}
+
+.player-stat {
+	display: inline-flex !important;
+	min-width: calc(4.4 * var(--u));
+	min-height: calc(2.5 * var(--u));
+	align-items: center;
+	justify-content: center;
+	gap: calc(.3 * var(--u));
+	overflow: visible !important;
+	border: 1px solid #52796f99;
+	border-radius: var(--radius-sm);
+	padding: calc(.12 * var(--u)) calc(.46 * var(--u));
+	color: var(--color-muted);
+	font-size: max(.72rem, calc(1.22 * var(--fu)));
+	line-height: 1;
+}
+
+.player-stat-value {
+	color: var(--color-white);
+	font-size: max(.82rem, calc(1.34 * var(--fu)));
+	font-variant-numeric: tabular-nums;
+}
+
+.player-stat-icon {
+	display: inline-grid;
+	min-width: 1em;
+	place-items: center;
+	color: var(--color-teal);
+	font-size: max(.9rem, calc(1.5 * var(--fu)));
+	line-height: .8;
+}
+
+.player-stat-penalty .player-stat-icon {
+	color: var(--color-danger);
+}

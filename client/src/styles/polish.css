@@ -82,32 +82,6 @@
 	padding: .15rem .45rem;
 }
 
-.player-stat-labels {
-	display: flex !important;
-	align-items: center;
-	gap: calc(.28 * var(--u));
-	overflow: visible !important;
-}
-
-.player-stat {
-	display: inline-flex !important;
-	min-height: calc(2.15 * var(--u));
-	align-items: center;
-	gap: calc(.22 * var(--u));
-	overflow: visible !important;
-	border: var(--hair) solid #52796faa;
-	border-radius: var(--radius-sm);
-	padding: 0 calc(.38 * var(--u));
-	color: var(--color-muted);
-	font-size: calc(1.05 * var(--fu));
-	line-height: 1;
-}
-
-.player-stat b {
-	color: var(--color-white);
-	font-size: inherit;
-}
-
 .active-player-hud,
 .phase-hud,
 .turn-order-player {
