@@ -265,3 +265,8 @@ export function useLobbyVoice(
     toggleSelfMuted
   }), [notice, preferences, selfMuted, setVolume, status, toggleMuted, toggleSelfMuted]);
 }
+
+// The aggregate voice API a lobby exposes to the UI. Components take this whole
+// object rather than reaching into the hook, so VoiceStatus/PlayerInteractionCard
+// stay decoupled from the WebRTC plumbing.
+export type LobbyVoice = ReturnType<typeof useLobbyVoice>;

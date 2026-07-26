@@ -1,0 +1,20 @@
+.panzoom {
+	position: relative;
+	overflow: hidden;
+	touch-action: none;
+	cursor: grab;
+	background-color: #14100c;
+	background-image: repeating-linear-gradient(0deg, #ffffff08 0 1px, transparent 1px 44px), repeating-linear-gradient(90deg, #ffffff08 0 1px, transparent 1px 44px), radial-gradient(circle at 30% 20%, #2a1d12 0, #0f0b08 70%);
+}
+
+.panzoom:active {
+	cursor: grabbing;
+}
+
+.panzoom-content {
+	position: absolute;
+	top: 0;
+	left: 0;
+	transform-origin: 0 0;
+	will-change: transform;
+}

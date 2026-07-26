@@ -1,0 +1,104 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+@media (max-width:640px) and (orientation:landscape) {
+	.pile-design-panel {
+		grid-template-columns: minmax(5.5rem, .72fr) minmax(8.5rem, 1.28fr);
+		column-gap: .25rem;
+		padding: .35rem;
+	}
+
+	.pile-design-panel-heading {
+		gap: .3rem;
+	}
+
+	.pile-design-panel-heading > span:last-child {
+		display: none;
+	}
+
+	.pile-design-actions {
+		gap: .18rem;
+	}
+
+	.pile-design-action-row,
+	.pile-design-preset-row {
+		gap: .15rem;
+	}
+
+	.pile-design-actions button {
+		padding-inline: .15rem;
+		font-size: .61rem;
+	}
+
+	.pile-design-note,
+	.pile-preview-status {
+		font-size: .59rem;
+	}
+
+}
+
+@media (max-height:420px) and (orientation:landscape) {
+	.result-panel {
+		grid-template-columns: minmax(9rem, .65fr) minmax(14rem, 1.35fr);
+		align-items: center;
+	}
+
+	.result-panel > .button-primary {
+		grid-column: 1 / -1;
+	}
+
+	.result-row {
+		min-height: 2rem;
+	}
+
+	.result-panel .dialog-title {
+		grid-column: 1 / -1;
+	}
+
+}
+
+@media (max-height:600px) and (orientation:portrait) {
+	.login-card {
+		gap: .7rem;
+		padding: 1rem;
+	}
+
+	.login-card .brand {
+		font-size: 2rem;
+	}
+
+	.login-note {
+		font-size: .68rem;
+	}
+
+	.lobby-list-content {
+		gap: .4rem;
+	}
+
+	.lobby-card {
+		min-height: 4.8rem;
+	}
+
+	.member-card {
+		min-height: 3rem;
+	}
+
+}
+
+@media (max-width:390px) {
+	.create-button {
+		padding-inline: .55rem;
+	}
+
+	.settings-form {
+		grid-template-columns: 1fr;
+	}
+
+	.settings-form > button {
+		grid-column: 1;
+	}
+
+	.audio-levels {
+		grid-template-columns: 1fr;
+	}
+
+}

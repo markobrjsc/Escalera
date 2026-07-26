@@ -1,0 +1,29 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.game-hud {
+	position: relative;
+	z-index: 8;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--gap);
+}
+
+.hud-kicker {
+	color: var(--color-teal);
+	font-size: var(--t-xs);
+	font-weight: 900;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+}
+
+.turn-hint {
+	z-index: 8;
+	margin: 0;
+	color: var(--color-ready);
+	font-size: var(--t-xs);
+	font-weight: 800;
+	letter-spacing: .06em;
+	text-align: center;
+	text-transform: uppercase;
+}

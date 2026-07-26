@@ -1,0 +1,46 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+@keyframes target-pulse {
+	0%,
+	100% {
+		filter: brightness(1);
+	}
+
+	50% {
+		filter: brightness(1.4);
+	}
+
+}
+
+@keyframes urgent-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: .45;
+	}
+
+}
+
+@keyframes event-in {
+	from {
+		opacity: 0;
+		transform: translateX(.6rem);
+	}
+
+	to {
+		opacity: 1;
+		transform: none;
+	}
+
+}
+
+/* Reduced motion keeps every cue, only without travel: flights pulse in place
+   (see fx.tsx) and the deal choreography is skipped entirely. The class comes
+   from initMotionPreference() in fx.tsx (OS signal, overridable). */
+.motion-reduced .is-target,
+.motion-reduced .turn-countdown.is-urgent {
+	animation: none;
+}

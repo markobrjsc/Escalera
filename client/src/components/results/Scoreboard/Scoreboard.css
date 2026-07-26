@@ -1,0 +1,7 @@
+.scoreboard-panel {
+	width: min(96vw, 64rem);
+}
+
+.scoreboard-current .result-row {
+	grid-template-columns: minmax(7rem, 1fr) repeat(3, auto);
+}

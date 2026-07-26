@@ -1,0 +1,42 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.game-events {
+	position: absolute;
+	z-index: 22;
+	right: max(var(--edge), env(safe-area-inset-right));
+	bottom: calc(var(--ctrl) + 2 * var(--edge));
+	display: grid;
+	justify-items: end;
+	gap: calc(.3 * var(--u));
+	pointer-events: none;
+}
+
+.game-event {
+	border: var(--hair) solid var(--color-muted);
+	border-radius: var(--radius-sm);
+	padding: calc(.2 * var(--u)) calc(.6 * var(--u));
+	background: var(--color-onyx);
+	color: var(--color-muted);
+	font-size: var(--t-xs);
+	font-weight: 800;
+	animation: event-in .25s ease-out both;
+}
+
+.game-error {
+	position: absolute;
+	z-index: 30;
+	left: 50%;
+	bottom: calc(var(--hand-visible) + var(--gap));
+	max-width: min(80vw, calc(60 * var(--u)));
+	overflow: hidden;
+	transform: translateX(-50%);
+	border: var(--hair) solid var(--color-danger);
+	border-radius: var(--radius-sm);
+	padding: calc(.3 * var(--u)) calc(.9 * var(--u));
+	background: var(--color-onyx);
+	color: var(--color-danger);
+	font-size: var(--t-xs);
+	font-weight: 800;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

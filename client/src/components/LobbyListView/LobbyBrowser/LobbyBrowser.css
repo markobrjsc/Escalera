@@ -1,0 +1,47 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.lobby-browser {
+	display: grid;
+	min-height: 0;
+	grid-template-rows: auto minmax(0, 1fr);
+	padding: var(--space-2);
+}
+
+.list-title,
+.dialog-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.list-title h2,
+.list-title h3,
+.dialog-title h2 {
+	margin: 0;
+}
+
+.lobby-browser > .list-title {
+	position: relative;
+	justify-content: center;
+	min-height: 2.7rem;
+}
+
+.lobby-browser > .list-title h3 {
+	font-size: var(--font-lg);
+}
+
+.lobby-browser > .list-title .badge {
+	position: absolute;
+	right: 0;
+}
+
+.lobby-scroll {
+	display: grid;
+	min-height: 0;
+	align-content: start;
+	gap: var(--space-2);
+	overflow-y: auto;
+	padding: var(--space-2) .15rem .15rem;
+	scrollbar-color: var(--color-teal) var(--color-onyx);
+}

@@ -34,15 +34,38 @@ describe("autoritärer Spielzustand", () => {
     expect(normalizeGameState(legacy).turn).toEqual({ hasDrawn: false, opensAt: null, deadlineAt: null });
   });
 
+  it("normalisiert ältere Endstände ohne ausgewiesene Münzkompensation", () => {
+    const current = createInitialGameState(["a", "b"], 1, () => 0);
+    const legacy = {
+      ...current,
+      status: "FINISHED",
+      placements: [{ userId: "a", rank: 1, totalPenalty: 20 }]
+    } as unknown as GameState;
+    expect(normalizeGameState(legacy).placements[0].compensatedPenalty).toBe(0);
+  });
+
+  it("projiziert kompensierte Strafpunkte im Endstand", () => {
+    const state = createInitialGameState(["a", "b"], 1, () => 0);
+    state.status = "FINISHED";
+    state.placements = [{ userId: "a", rank: 1, totalPenalty: 20, compensatedPenalty: 90 }];
+    expect(toPlayerGameView(state, "a").placements[0]).toEqual({
+      userId: "a",
+      rank: 1,
+      totalPenalty: 20,
+      compensatedPenalty: 90
+    });
+  });
+
   it("gibt nur die eigene Hand in einer privaten Spielansicht aus", () => {
     const state = createInitialGameState(["a", "b"], 1, () => 0);
     state.roundResults = [{ round: 1, phase: 1, endedById: "a", scores: [
       { userId: "a", penalty: 0, totalPenalty: 0 },
       { userId: "b", penalty: 18, totalPenalty: 18 }
     ] }];
+    state.players[1].coins = 3;
     const view = toPlayerGameView(state, "a");
     expect(view.ownHand).toHaveLength(11);
-    expect(view.players).toEqual(expect.arrayContaining([expect.objectContaining({ userId: "b", handCount: 11, coins: 7 })]));
+    expect(view.players).toEqual(expect.arrayContaining([expect.objectContaining({ userId: "b", handCount: 11, coins: 3 })]));
     expect(view.roundResults).toEqual(state.roundResults);
     expect(JSON.stringify(view)).not.toContain('"hand"');
   });

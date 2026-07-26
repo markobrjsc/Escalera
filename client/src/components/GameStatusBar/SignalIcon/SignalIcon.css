@@ -1,0 +1,15 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.signal-icon {
+	width: calc(2.6 * var(--u));
+	height: auto;
+	aspect-ratio: 16 / 13;
+	fill: none;
+	stroke: var(--color-danger);
+	stroke-width: 1.6;
+	stroke-linecap: round;
+}
+
+.signal-icon.online {
+	stroke: var(--color-ready);
+}

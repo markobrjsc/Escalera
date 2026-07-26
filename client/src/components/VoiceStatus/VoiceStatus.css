@@ -1,0 +1,142 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.voice-status {
+	position: fixed;
+	z-index: 45;
+	top: max(var(--edge, .6rem), env(safe-area-inset-top));
+	left: 50%;
+	display: grid;
+	max-width: min(94vw, 34rem);
+	grid-template-columns: minmax(0, auto) auto;
+	align-items: center;
+	gap: .2rem .55rem;
+	transform: translateX(-50%);
+	border: var(--hair) solid #52796f88;
+	border-radius: 999px;
+	padding: .22rem .3rem .22rem .75rem;
+	background: #0d0d0df2;
+	color: var(--color-muted);
+	font-size: var(--t-xs);
+	box-shadow: 0 .35rem 1rem #0008;
+}
+
+.voice-connection {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: .42rem;
+	white-space: nowrap;
+}
+
+.voice-connection > span {
+	color: var(--color-waiting);
+}
+
+.voice-status > small {
+	grid-column: 1 / -1;
+	max-width: 30rem;
+	padding: 0 .45rem .2rem 0;
+	text-align: center;
+	white-space: normal;
+}
+
+.voice-status-connected .voice-connection > span {
+	color: var(--color-ready);
+}
+
+.voice-status-listen-only .voice-connection > span,
+.voice-status-unsupported .voice-connection > span {
+	color: var(--color-danger);
+}
+
+.voice-self-mute {
+	display: inline-flex;
+	min-width: 0;
+	min-height: 44px;
+	align-items: center;
+	gap: .35rem;
+	border-color: var(--color-teal);
+	border-radius: 999px;
+	padding: .3rem .7rem;
+	color: var(--color-ready);
+	font-size: var(--t-xs);
+	white-space: nowrap;
+	touch-action: manipulation;
+}
+
+.voice-microphone-icon {
+	width: 1em;
+	height: 1em;
+	flex: 0 0 auto;
+	stroke-width: 1.65;
+}
+
+.voice-microphone-slash {
+	stroke-width: 2;
+}
+
+.voice-self-mute[aria-pressed="true"] {
+	border-color: var(--color-danger);
+	background: #8f3b3233;
+	color: var(--color-danger);
+	box-shadow: 0 0 .6rem #8f3b3244;
+}
+
+.voice-self-mute:disabled {
+	color: var(--color-muted);
+}
+
+.voice-status-lobby {
+	position: static;
+	z-index: auto;
+	top: auto;
+	left: auto;
+	width: fit-content;
+	max-width: 100%;
+	justify-self: center;
+	transform: none;
+}
+
+.voice-status-game {
+	--game-u: clamp(2.6px, min(1dvh, .55vw), 12px);
+	top: max(calc(2 * var(--game-u)), env(safe-area-inset-top));
+	left: calc(50% + 29.6 * var(--game-u));
+	width: max-content;
+	max-width: min(22vw, 7.75rem);
+	grid-template-columns: minmax(0, 1fr);
+	justify-items: stretch;
+	gap: .06rem;
+	transform: none;
+	border-radius: var(--radius-sm);
+	padding: .14rem;
+}
+
+.voice-status-game .voice-self-mute {
+	width: 100%;
+	min-height: 44px;
+	justify-content: center;
+	gap: .28rem;
+	padding: .2rem .42rem;
+	font-size: max(.64rem, calc(1.05 * (4.1px + .43 * var(--game-u))));
+}
+
+.voice-status-game .voice-microphone-icon {
+	width: max(.68rem, calc(.75 * (4.1px + .43 * var(--game-u))));
+	height: max(.68rem, calc(.75 * (4.1px + .43 * var(--game-u))));
+}
+
+.voice-status-game:not(.voice-status-connected) .voice-self-mute strong {
+	max-width: 4.5rem;
+	font-size: max(.58rem, calc(.92 * (4.1px + .43 * var(--game-u))));
+	line-height: 1.05;
+	white-space: normal;
+}
+
+.voice-status-game .voice-self-mute:disabled {
+	opacity: .72;
+}
+
+.voice-status-game > small {
+	max-width: 7.4rem;
+	padding: .1rem .2rem;
+}

@@ -1,0 +1,22 @@
+.lobby-settings-row .setting-badges {
+	width: 100%;
+	justify-content: flex-start;
+	flex-wrap: wrap;
+	overflow: visible;
+}
+
+.lobby-settings-row .badge {
+	white-space: nowrap;
+}
+
+.setting-badges {
+	display: flex;
+	gap: .35rem;
+	overflow-x: auto;
+	padding-bottom: .15rem;
+}
+
+.setting-badges .badge {
+	flex: 0 0 auto;
+	color: var(--color-muted);
+}

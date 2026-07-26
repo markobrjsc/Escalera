@@ -1,0 +1,55 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.game-result-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 70;
+	display: grid;
+	place-items: center;
+	padding: clamp(.45rem, 2vmin, 1rem);
+	background: #0d0d0df2;
+}
+
+.result-panel {
+	display: grid;
+	width: min(92vw, 42rem);
+	max-height: calc(100dvh - 1rem);
+	gap: clamp(.45rem, 2dvh, 1rem);
+	overflow: auto;
+	padding: clamp(.65rem, 3vmin, 1.35rem);
+}
+
+.result-table {
+	display: grid;
+	gap: .3rem;
+}
+
+.result-row {
+	display: grid;
+	min-height: clamp(2rem, 8dvh, 3.25rem);
+	grid-template-columns: minmax(7rem, 1fr) repeat(3, auto);
+	align-items: center;
+	gap: clamp(.5rem, 3vw, 1.5rem);
+	border: 1px solid var(--color-teal);
+	padding: .3rem .55rem;
+	font-size: var(--font-xs);
+}
+
+.result-row span {
+	color: var(--color-muted);
+}
+
+.result-row b {
+	color: var(--color-white);
+	white-space: nowrap;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}

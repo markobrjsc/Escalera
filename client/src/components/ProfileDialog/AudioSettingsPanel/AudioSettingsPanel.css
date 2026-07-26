@@ -1,0 +1,45 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.audio-levels {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-2);
+}
+
+.audio-level {
+	display: grid;
+	gap: .35rem;
+	border: 0;
+	padding: 0;
+	color: var(--color-white);
+	font-size: var(--t-xs);
+}
+
+.audio-level > span {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .5rem;
+	text-transform: uppercase;
+	letter-spacing: .07em;
+}
+
+.audio-level output {
+	color: var(--color-teal-light);
+	font-variant-numeric: tabular-nums;
+}
+
+.audio-level input[type="range"] {
+	width: 100%;
+	min-height: 1.35rem;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	accent-color: var(--color-teal);
+	cursor: pointer;
+}
+
+.profile-audio.is-muted .audio-levels {
+	opacity: .48;
+}

@@ -1,0 +1,78 @@
+.lobby-layout .member-card {
+	min-height: clamp(7rem, 18dvh, 9rem);
+	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-rows: 1fr auto;
+	align-content: center;
+	border-width: 2px;
+	padding: var(--space-2);
+	background: var(--color-onyx);
+}
+
+.lobby-layout .member-card.is-waiting {
+	border-color: var(--color-danger);
+	color: var(--color-danger);
+}
+
+.lobby-layout .member-card.is-ready {
+	border-color: var(--color-ready);
+	color: var(--color-ready);
+}
+
+.lobby-layout .member-card .profile-icon {
+	width: clamp(3rem, 9vmin, 4.5rem);
+}
+
+.lobby-layout .member-state {
+	grid-column: 1 / -1;
+	justify-self: center;
+}
+
+.member-card {
+	display: grid;
+	min-height: clamp(3.3rem, 9dvh, 4.25rem);
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
+	border: 2px solid currentColor;
+	padding: .45rem .65rem;
+	background: var(--color-jet);
+}
+
+.member-card > div {
+	display: grid;
+	min-width: 0;
+}
+
+.member-card > div strong,
+.member-card > div span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.member-card > div span {
+	color: var(--color-muted);
+	font-size: var(--font-xs);
+}
+
+.member-card.is-ready {
+	color: var(--color-ready);
+}
+
+.member-card.is-waiting {
+	color: var(--color-waiting);
+}
+
+.member-card.is-offline {
+	border-style: dashed;
+	opacity: .62;
+}
+
+.member-card strong {
+	color: var(--color-white);
+}
+
+.member-state {
+	font-size: var(--font-xs);
+	font-weight: 900;
+}

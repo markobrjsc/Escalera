@@ -1,0 +1,78 @@
+/* Alte Ansicht gleitet hinaus, neue kommt von der Gegenseite. Der Wechsel ins
+Gamefield blendet unter dem Match-Intro aus. */
+.view-slide {
+	height: 100dvh;
+}
+
+.view-slide.is-leaving {
+	position: fixed;
+	inset: 0;
+	z-index: 45;
+	pointer-events: none;
+}
+
+.slide-to-left,
+.slide-to-right,
+.slide-from-right,
+.slide-from-left,
+.fade-under {
+	will-change: transform, opacity;
+}
+
+.slide-to-left {
+	animation: view-to-left .56s cubic-bezier(.3, .75, .3, 1) both;
+}
+
+.slide-to-right {
+	animation: view-to-right .56s cubic-bezier(.3, .75, .3, 1) both;
+}
+
+.slide-from-right {
+	animation: view-from-right .56s cubic-bezier(.3, .75, .3, 1) both;
+}
+
+.slide-from-left {
+	animation: view-from-left .56s cubic-bezier(.3, .75, .3, 1) both;
+}
+
+.fade-under {
+	animation: view-fade-under .5s ease both;
+}
+
+@keyframes view-to-left {
+	to {
+		transform: translateX(-105vw);
+	}
+}
+
+@keyframes view-to-right {
+	to {
+		transform: translateX(105vw);
+	}
+}
+
+@keyframes view-from-right {
+	from {
+		transform: translateX(105vw);
+	}
+}
+
+@keyframes view-from-left {
+	from {
+		transform: translateX(-105vw);
+	}
+}
+
+@keyframes view-fade-under {
+	to {
+		opacity: 0;
+	}
+}
+
+.motion-reduced .view-slide {
+	animation: none !important;
+}
+
+.motion-reduced .view-slide.is-leaving {
+	display: none;
+}

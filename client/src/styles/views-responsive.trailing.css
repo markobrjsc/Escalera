@@ -1,0 +1,52 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+@media (max-height:520px) and (orientation:landscape) {
+	.game-menu {
+		inset: 0 auto 0 0;
+		width: min(30vw, 28rem);
+		height: 100dvh;
+		max-height: 100dvh;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto auto repeat(3, minmax(44px, auto)) minmax(0, 1fr) auto;
+		align-content: start;
+	}
+
+	.game-menu .dialog-title,
+	.game-menu .menu-sort,
+	.game-menu .leave-game {
+		grid-column: 1;
+	}
+
+	.game-menu > button:not(.leave-game),.game-menu .sort-control button,.game-menu .leave-game {
+		min-height: 44px;
+		font-size: clamp(.66rem, 1.7vw, var(--font-xs));
+	}
+
+}
+
+@media (max-width:480px) {
+	.settings-form {
+		grid-template-columns: 1fr;
+	}
+
+	.settings-form > * {
+		grid-column: 1 !important;
+	}
+
+	.profile-dialog {
+		padding: var(--space-3);
+	}
+
+	.stat-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.player-voice-controls {
+		grid-template-columns: 1fr;
+	}
+
+	.player-voice-controls .audio-mute {
+		width: 100%;
+	}
+
+}

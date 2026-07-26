@@ -1,0 +1,7 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.centered,
+.login-view {
+	display: grid;
+	place-items: center;
+}

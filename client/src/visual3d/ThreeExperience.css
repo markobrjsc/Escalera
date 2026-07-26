@@ -1,0 +1,113 @@
+.visual3d-root {
+	position: relative;
+	isolation: isolate;
+	background: transparent;
+}
+
+.three-experience {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	overflow: hidden;
+	pointer-events: none;
+	contain: strict;
+	background:
+		radial-gradient(circle at 12% 18%, #52796f2b, transparent 31rem),
+		radial-gradient(circle at 88% 82%, #d8b66a12, transparent 26rem),
+		linear-gradient(160deg, #101a17 0%, #0d0d0d 46%, #07100d 100%);
+}
+
+.three-experience::before,
+.three-experience::after {
+	position: absolute;
+	inset: -18%;
+	content: "";
+	opacity: .5;
+	transform: translateZ(0);
+	transition: opacity .45s ease, background .65s ease;
+}
+
+.three-experience::before {
+	background:
+		linear-gradient(115deg, transparent 35%, #8cd6b30b 49%, transparent 63%),
+		repeating-linear-gradient(125deg, transparent 0 4.5rem, #ffffff05 4.55rem 4.6rem);
+	mask-image: radial-gradient(ellipse, #000 5%, transparent 66%);
+}
+
+.three-experience::after {
+	background: radial-gradient(ellipse at center, transparent 0 32%, #0008 82%);
+}
+
+.three-experience[data-scene="game"] {
+	background:
+		radial-gradient(circle at 20% 12%, #8cd6b32e, transparent 27rem),
+		radial-gradient(circle at 82% 86%, #ff7a7a15, transparent 24rem),
+		linear-gradient(155deg, #10221c 0%, #0d0d0d 48%, #080c0a 100%);
+}
+
+.three-experience[data-scene="lobby"] {
+	background:
+		radial-gradient(circle at 15% 22%, #8cd6b324, transparent 29rem),
+		radial-gradient(circle at 86% 76%, #d8b66a16, transparent 24rem),
+		linear-gradient(160deg, #101d19 0%, #0d0d0d 51%, #08100d 100%);
+}
+
+.three-experience__canvas {
+	position: absolute;
+	inset: 0;
+	display: block;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	filter: saturate(1.08) contrast(1.04);
+	transition: opacity .6s ease;
+}
+
+.three-experience[data-state="ready"] .three-experience__canvas {
+	opacity: .86;
+}
+
+.three-experience[data-state="ready"]::before {
+	opacity: .22;
+}
+
+.three-experience[data-state="lost"] .three-experience__canvas,
+.three-experience[data-state="fallback"] .three-experience__canvas {
+	opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html:not(.motion-full) .three-experience,
+	html:not(.motion-full) .three-experience::before,
+	html:not(.motion-full) .three-experience::after,
+	html:not(.motion-full) .three-experience__canvas {
+		transition: none;
+	}
+}
+
+.three-experience[data-motion="reduced"],
+.three-experience[data-motion="reduced"]::before,
+.three-experience[data-motion="reduced"]::after,
+.three-experience[data-motion="reduced"] .three-experience__canvas {
+	transition: none;
+}
+
+@media (max-width: 720px), (max-height: 520px) {
+	.three-experience::before {
+		display: none;
+	}
+
+	.three-experience__canvas {
+		filter: none;
+	}
+
+	.three-experience[data-state="ready"] .three-experience__canvas {
+		opacity: .72;
+	}
+}
+
+@media (forced-colors: active) {
+	.three-experience {
+		display: none;
+	}
+}

@@ -1,0 +1,66 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.lobby-view {
+	padding: 0;
+}
+
+.lobby-layout {
+	display: grid;
+	height: calc(100% - clamp(3.5rem, 10dvh, 5rem));
+	grid-template-rows: auto auto auto auto;
+	align-content: start;
+	gap: var(--space-3);
+	overflow-y: auto;
+	padding: var(--space-3) var(--page-inline) var(--page-bottom);
+}
+
+.lobby-name {
+	margin: 0;
+	text-align: center;
+	font-size: clamp(1.5rem, 6vw, 2.4rem);
+	line-height: 1;
+}
+
+.lobby-settings-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.lobby-settings-button {
+	border-color: var(--color-teal);
+	color: var(--color-teal);
+}
+
+.lobby-layout .lobby-actions {
+	width: min(100%, 18rem);
+	grid-template-columns: 1fr;
+	justify-self: center;
+	margin-top: 0;
+}
+
+.lobby-header {
+	display: flex;
+	align-items: start;
+	justify-content: space-between;
+}
+
+.lobby-code {
+	margin: .1rem 0 0;
+	font-size: clamp(2rem, 10vw, 3.5rem);
+}
+
+.lobby-status {
+	display: grid;
+	justify-items: end;
+	gap: .25rem;
+}
+
+.lobby-actions {
+	display: grid;
+	width: min(100%, 30rem);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	justify-self: center;
+	gap: clamp(1rem, 6vw, 2.5rem);
+}

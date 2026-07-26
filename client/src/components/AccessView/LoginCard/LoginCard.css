@@ -1,0 +1,111 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.login-card {
+	display: grid;
+	width: min(90vw, 31rem);
+	max-width: 100%;
+	min-width: 0;
+	max-height: 70dvh;
+	gap: clamp(1rem, 4dvh, 2.25rem);
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding: clamp(1.25rem, 5vmin, 2.5rem);
+}
+
+.login-card form,
+.login-card label {
+	min-width: 0;
+}
+
+.login-card form {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.registration-card {
+	gap: var(--space-2);
+}
+
+.registration-warning {
+	display: flex;
+	align-items: start;
+	border: 1px solid var(--color-waiting);
+	padding: .55rem;
+	color: var(--color-waiting);
+	font-size: var(--font-xs);
+	line-height: 1.35;
+}
+
+.registration-warning input {
+	width: 1.2rem;
+	min-height: 1.2rem;
+	flex: 0 0 auto;
+	accent-color: var(--color-teal);
+}
+
+.login-note {
+	margin: 0;
+	font-size: var(--font-xs);
+	line-height: 1.45;
+	text-align: center;
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+	.login-card {
+		width: min(94vw, 42rem);
+		max-height: calc(100dvh - 1rem);
+		grid-template-columns: minmax(7rem, .6fr) minmax(0, 1.4fr);
+		grid-template-rows: minmax(0, 1fr) auto;
+		column-gap: clamp(.75rem, 3vw, 1.4rem);
+		row-gap: .4rem;
+		padding: .75rem;
+	}
+
+	.login-card > .brand-suits {
+		align-self: center;
+	}
+
+	.login-card .brand {
+		font-size: clamp(2rem, 13dvh, 3.2rem);
+	}
+
+	.login-card form {
+		grid-row: 1 / -1;
+		grid-column: 2;
+		align-self: center;
+		gap: .45rem;
+	}
+
+	.login-card label {
+		font-size: .72rem;
+	}
+
+	.login-card .login-note {
+		grid-row: 2;
+		grid-column: 1;
+		font-size: .62rem;
+	}
+
+	.registration-card form {
+		align-self: center;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.registration-card .registration-warning {
+		padding: .35rem;
+		font-size: .62rem;
+	}
+
+	.registration-card form > .error {
+		grid-column: 1 / -1;
+		margin: 0;
+	}
+
+	.registration-card form > button {
+		min-height: 2.25rem;
+		padding-inline: .45rem;
+		font-size: clamp(.62rem, 1.8vw, .75rem);
+		line-height: 1.15;
+		white-space: normal;
+	}
+}

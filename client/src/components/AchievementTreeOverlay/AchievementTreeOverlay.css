@@ -1,0 +1,66 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* Full-screen advancement card: a bordered window over a tiled dark backdrop. */
+.tree-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 96;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	background: #0d0d0df6;
+}
+
+.tree-overlay-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border-bottom: 1px solid var(--color-muted);
+}
+
+.tree-overlay-bar h2 {
+	margin: 0;
+	font-size: var(--font-lg);
+}
+
+.tree-hint {
+	margin: 0;
+	padding: .4rem;
+	text-align: center;
+	font-size: var(--font-xs);
+	border-top: 1px solid var(--color-muted);
+}
+
+.tree-canvas {
+	position: relative;
+}
+
+.tree-wires {
+	position: absolute;
+	top: 0;
+	left: 0;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.tree-wire {
+	fill: none;
+	stroke: #6b5836;
+	stroke-width: 3;
+}
+
+.tree-wire.is-live {
+	stroke: var(--color-ready);
+}
+
+.tree-row-title {
+	position: absolute;
+	color: var(--color-muted);
+	font-family: var(--font-display);
+	font-size: .8rem;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	pointer-events: none;
+}

@@ -1,0 +1,8 @@
+.final-result {
+	z-index: 80;
+}
+
+.placement-1 {
+	border-width: 3px;
+	background: var(--color-jet);
+}

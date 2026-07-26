@@ -4,6 +4,8 @@ import sharp from "sharp";
 import { PrismaService } from "../prisma.service.js";
 import { ObjectStorageService } from "./object-storage.service.js";
 import type { AudioPreferencesDto } from "./audio-preferences.dto.js";
+import type { TutorialProgressDto } from "./tutorial-progress.dto.js";
+import { assertTutorialComplete, withReadChapter } from "./tutorial-progress.js";
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_IMAGE_FORMATS = new Set(["jpeg", "png", "webp"]);
@@ -61,8 +63,36 @@ export class ProfilesService {
     return user;
   }
 
-  completeTutorial(userId: string) {
-    return this.prisma.user.update({ where: { id: userId }, data: { tutorialCompleted: true } });
+  async updateTutorialProgress(userId: string, input: TutorialProgressDto) {
+    const current = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { tutorialReadMask: true } });
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        tutorialStep: input.step,
+        tutorialReadMask: withReadChapter(current.tutorialReadMask, input.readChapter)
+      }
+    });
+  }
+
+  async completeTutorial(userId: string, input: TutorialProgressDto) {
+    const current = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { tutorialReadMask: true } });
+    const tutorialReadMask = withReadChapter(current.tutorialReadMask, input.readChapter);
+    assertTutorialComplete(tutorialReadMask);
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        tutorialCompleted: true,
+        tutorialStep: input.step,
+        tutorialReadMask
+      }
+    });
+  }
+
+  resetTutorial(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { tutorialCompleted: false, tutorialStep: 0, tutorialReadMask: 0 }
+    });
   }
 
   async getAudioPreferences(userId: string) {

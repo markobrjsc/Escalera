@@ -33,7 +33,11 @@ export default defineConfig({
         ]
       },
       workbox: {
-        navigateFallbackDenylist: [/^\/api\//]
+        navigateFallbackDenylist: [/^\/api\//],
+        // WebGL2 is checked before this lazy chunk is requested. Keeping the
+        // renderer out of the install precache also keeps fallback devices
+        // from downloading half a megabyte they cannot execute.
+        globIgnores: ["**/createThreeScene-*.js"]
       }
     })
   ],
