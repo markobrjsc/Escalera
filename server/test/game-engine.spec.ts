@@ -94,6 +94,8 @@ describe("autoritärer Spielzug", () => {
     expect(bought.players[0].coins).toBe(6);
     expect(bought.players[0].hand.some((entry) => entry.id === "7c")).toBe(true);
     expect(() => buyDiscard(bought, "p1")).toThrow("nicht mehr zum Kauf");
+    const nextTurn = discardCard(drawCard(bought, "p2", "discard"), "p2", "8c");
+    expect(nextTurn.players[0].coins).toBe(6);
   });
 
   it("verändert bei einer ungültigen Aktion nicht den übergebenen Zustand", () => {
@@ -109,6 +111,9 @@ describe("autoritärer Spielzug", () => {
     state.players[0].hand = [card("last", "7")];
     state.players[1].hand = [card("eight", "8")];
     state.players[2].hand = [{ id: "joker-test", kind: "joker" }];
+    state.players[0].coins = 6;
+    state.players[1].coins = 3;
+    state.players[2].coins = 0;
     state.players[1].totalPenalty = 5;
     state.players[2].totalPenalty = 20;
 
@@ -122,7 +127,8 @@ describe("autoritärer Spielzug", () => {
       { userId: "p3", penalty: 30, totalPenalty: 50 }
     ] }]);
     expect(result.activePlayerId).toBe("p3");
-    expect(result.players.every((entry) => entry.hand.length === 11 && entry.coins === 7 && !entry.phaseLaid)).toBe(true);
+    expect(result.players.every((entry) => entry.hand.length === 11 && !entry.phaseLaid)).toBe(true);
+    expect(result.players.map((entry) => entry.coins)).toEqual([6, 3, 0]);
     expect(result.melds).toEqual([]);
     expect(result.discardPile).toHaveLength(1);
   });

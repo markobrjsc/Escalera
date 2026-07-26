@@ -214,7 +214,6 @@ function completeRound(state: GameState, endedById: string, random: (upperExclus
   const cards = shuffle(buildDeck(state.players.length, state.jokersPerPlayer), random);
   for (const entry of state.players) {
     entry.hand = cards.splice(0, 11);
-    entry.coins = 7;
     entry.phaseLaid = false;
   }
   const discardTop = cards.shift();
