@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, UnauthorizedExcepti
 import * as argon2 from "argon2";
 import { PrismaService } from "../prisma.service.js";
 import { AccessDto } from "./access.dto.js";
-import { hashSessionToken, newSessionToken, normalizeUsername, SESSION_MAX_AGE_MS } from "./auth.types.js";
+import { hashSessionToken, isAdminUsername, newSessionToken, normalizeUsername, SESSION_MAX_AGE_MS } from "./auth.types.js";
 
 @Injectable()
 export class AuthService {
@@ -73,12 +73,15 @@ export class AuthService {
     return this.publicUser(session.user);
   }
 
-  publicUser(user: { id: string; username: string; avatarKey?: string | null; tutorialCompleted?: boolean }) {
+  publicUser(user: { id: string; username: string; avatarKey?: string | null; tutorialCompleted?: boolean; tutorialStep?: number; tutorialReadMask?: number }) {
     return {
       id: user.id,
       username: user.username,
       avatarKey: user.avatarKey ?? null,
-      tutorialCompleted: user.tutorialCompleted ?? false
+      tutorialCompleted: user.tutorialCompleted ?? false,
+      tutorialStep: user.tutorialStep ?? 0,
+      tutorialReadMask: user.tutorialReadMask ?? 0,
+      isAdmin: isAdminUsername(user.username)
     };
   }
 }

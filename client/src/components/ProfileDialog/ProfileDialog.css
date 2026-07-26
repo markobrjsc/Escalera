@@ -1,0 +1,28 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.profile-dialog {
+	display: grid;
+	width: min(94vw, 44rem);
+	max-height: 94dvh;
+	justify-items: stretch;
+	gap: var(--space-2);
+	overflow-y: auto;
+}
+
+.profile-dialog .dialog-title {
+	width: 100%;
+}
+
+.achievements-open {
+	display: grid;
+	width: 100%;
+	gap: .1rem;
+	padding-block: var(--space-2);
+	border-color: var(--color-teal);
+}
+
+.achievements-open small {
+	color: var(--color-muted);
+	font-size: var(--font-xs);
+	font-weight: 700;
+}

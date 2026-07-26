@@ -1,0 +1,73 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.achievement-toasts {
+	position: fixed;
+	top: max(var(--space-3), env(safe-area-inset-top));
+	right: max(var(--space-3), env(safe-area-inset-right));
+	z-index: 95;
+	display: grid;
+	gap: var(--space-1);
+	width: min(88vw, 20rem);
+	pointer-events: none;
+}
+
+.achievement-toast {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: var(--space-2);
+	width: 100%;
+	min-height: 0;
+	border: 1px solid var(--color-ready);
+	border-radius: var(--radius-md);
+	padding: var(--space-2);
+	background: var(--color-onyx);
+	text-align: left;
+	pointer-events: auto;
+	animation: toast-in .3s ease-out both;
+}
+
+.achievement-toast .toast-star {
+	color: var(--color-waiting);
+	font-size: 1.5rem;
+	line-height: 1;
+}
+
+.achievement-toast > div {
+	display: grid;
+	min-width: 0;
+	gap: .1rem;
+}
+
+.achievement-toast strong {
+	color: var(--color-ready);
+	font-size: var(--font-xs);
+	font-weight: 900;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+}
+
+.achievement-toast > div > span {
+	overflow: hidden;
+	color: var(--color-white);
+	font-size: var(--font-sm);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+@keyframes toast-in {
+	from {
+		opacity: 0;
+		transform: translateX(1rem);
+	}
+
+	to {
+		opacity: 1;
+		transform: none;
+	}
+
+}
+
+.motion-reduced .achievement-toast {
+	animation: none;
+}

@@ -1,0 +1,194 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* Stapel-Labor (#51): Das äußere Board bleibt exakt das Gamefield. Das kompakte
+   Dock sitzt ausschließlich in der mittleren Meld-Zone und kann daher weder die
+   beiden Stapel noch die darüberliegende Deal-Bühne verdecken. */
+.pile-design-title {
+	grid-column: 3;
+	justify-self: end;
+}
+
+.pile-design-workbench {
+	position: relative;
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
+	place-items: center;
+	overflow: hidden;
+	padding: calc(1.1 * var(--u));
+}
+
+.pile-design-workbench::before {
+	content: "DEPTH  /  SCATTER  /  MOTION";
+	position: absolute;
+	inset: auto 0 calc(1.2 * var(--u));
+	color: #52796f22;
+	font-family: var(--font-display);
+	font-size: calc(3.8 * var(--fu));
+	font-weight: 900;
+	letter-spacing: .18em;
+	text-align: center;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.pile-design-panel {
+	position: relative;
+	z-index: 3;
+	display: grid;
+	width: min(calc(100% - 30 * var(--u)), 50rem);
+	max-width: 100%;
+	max-height: 100%;
+	grid-template-columns: minmax(8rem, .82fr) minmax(12rem, 1.18fr);
+	grid-template-areas: "heading heading" "sliders actions" "note status";
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: clamp(.3rem, 1.35vmin, .7rem) clamp(.5rem, 1.7vmin, 1rem);
+	overflow: auto;
+	padding: clamp(.45rem, 1.5vmin, .8rem);
+	background: #0d0d0df2;
+	box-shadow: 0 calc(.65 * var(--u)) calc(1.8 * var(--u)) #000b;
+	scrollbar-width: none;
+}
+
+.pile-design-panel::-webkit-scrollbar {
+	display: none;
+}
+
+.pile-design-panel-heading {
+	grid-area: heading;
+	display: grid;
+	min-width: 0;
+	grid-template-columns: auto auto minmax(0, 1fr);
+	align-items: center;
+	gap: calc(.75 * var(--u));
+	border-bottom: var(--hair) solid #52796f66;
+	padding-bottom: calc(.45 * var(--u));
+}
+
+.pile-design-panel-heading h2 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--t-md);
+	letter-spacing: .04em;
+	line-height: 1;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.pile-design-panel-heading > span:last-child {
+	overflow: hidden;
+	color: var(--color-muted);
+	font-size: clamp(.65rem, var(--t-xs), .78rem);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pile-design-sliders {
+	grid-area: sliders;
+	display: grid;
+	align-content: center;
+	gap: clamp(.25rem, 1vmin, .55rem);
+}
+
+.pile-design-panel label {
+	display: grid;
+	min-width: 0;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: .1rem .5rem;
+	font-size: clamp(.68rem, var(--t-xs), .82rem);
+}
+
+.pile-design-panel label output {
+	color: var(--color-ready);
+	font-variant-numeric: tabular-nums;
+}
+
+.pile-design-panel input[type="range"] {
+	grid-column: 1 / -1;
+	min-height: max(1.35rem, calc(3 * var(--fu)));
+	border: 0;
+	padding: 0;
+	accent-color: var(--color-teal);
+}
+
+.pile-design-panel input[type="range"]:focus-visible {
+	outline: max(2px, calc(.18 * var(--u))) solid var(--color-white);
+	outline-offset: 2px;
+	border-radius: 999px;
+}
+
+.pile-design-actions {
+	grid-area: actions;
+	display: grid;
+	align-content: center;
+	gap: clamp(.22rem, .8vmin, .4rem);
+}
+
+.pile-design-action-row,
+.pile-design-preset-row {
+	display: grid;
+	gap: clamp(.2rem, .65vmin, .35rem);
+}
+
+.pile-design-action-row {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pile-design-preset-row {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pile-design-actions button {
+	min-width: 0;
+	min-height: max(1.65rem, var(--ctrl));
+	padding-inline: clamp(.25rem, .9vw, .6rem);
+	overflow: hidden;
+	font-size: clamp(.67rem, var(--t-xs), .78rem);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pile-design-preview {
+	width: 100%;
+}
+
+.pile-design-preview:active {
+	transform: none;
+}
+
+.pile-design-note {
+	grid-area: note;
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	font-size: clamp(.64rem, var(--t-xs), .75rem);
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pile-preview-status {
+	grid-area: status;
+	justify-self: end;
+	max-width: 100%;
+	overflow: hidden;
+	border: var(--hair) solid #52796f66;
+	border-radius: var(--radius-sm);
+	padding: calc(.2 * var(--u)) calc(.55 * var(--u));
+	color: var(--color-muted);
+	font-size: clamp(.64rem, var(--t-xs), .75rem);
+	font-weight: 800;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pile-preview-status.is-active {
+	border-color: var(--color-ready);
+	color: var(--color-ready);
+}
+
+.pile-slot.is-preview-cue {
+	border-color: var(--color-ready);
+	box-shadow: 0 0 0 max(2px, calc(.2 * var(--u))) var(--color-ready), 0 0 calc(2 * var(--u)) #8cd6b355;
+}

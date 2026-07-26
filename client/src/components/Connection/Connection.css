@@ -1,0 +1,21 @@
+.connection {
+	display: inline-flex;
+	align-items: center;
+	gap: .4rem;
+	color: var(--color-waiting);
+	font-size: var(--font-xs);
+	font-weight: 900;
+	text-transform: uppercase;
+}
+
+.connection::before {
+	width: .55rem;
+	height: .55rem;
+	border: 1px solid currentColor;
+	background: currentColor;
+	content: "";
+}
+
+.connection.online {
+	color: var(--color-ready);
+}

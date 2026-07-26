@@ -21,6 +21,7 @@ services:
     environment:
       PORT: 3000
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:8080}
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-escalera}:${POSTGRES_PASSWORD:-change-me-for-local-development}@postgres:5432/${POSTGRES_DB:-escalera}
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://object-storage:9000

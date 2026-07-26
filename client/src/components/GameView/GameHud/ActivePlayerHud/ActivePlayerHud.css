@@ -1,0 +1,45 @@
+.active-player-hud {
+	position: relative;
+	display: grid;
+	width: min(100%, calc(56 * var(--u)));
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	justify-self: center;
+	gap: calc(1.1 * var(--u));
+	border: 1px solid var(--color-white);
+	border-radius: var(--radius-sm);
+	padding: calc(.5 * var(--u)) calc(.9 * var(--u));
+}
+
+.active-player-hud.is-self {
+	border-color: var(--color-ready);
+}
+
+.active-player-hud .profile-icon {
+	width: calc(6.6 * var(--u));
+	border-width: var(--hair);
+	font-size: var(--t-md);
+}
+
+.active-player-hud > div {
+	display: grid;
+	min-width: 0;
+}
+
+.active-player-hud strong {
+	overflow: hidden;
+	font-family: var(--font-display);
+	font-size: var(--t-lg);
+	letter-spacing: .02em;
+	text-overflow: ellipsis;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.active-player-hud > div > span:not(.hud-kicker) {
+	overflow: hidden;
+	color: var(--color-muted);
+	font-size: var(--t-xs);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

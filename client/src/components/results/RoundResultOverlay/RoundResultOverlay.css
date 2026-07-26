@@ -1,0 +1,8 @@
+.result-panel h2 {
+	margin: .1rem 0 0;
+	font-size: clamp(1.35rem, 6vmin, 2.6rem);
+}
+
+.result-panel > .button-primary {
+	justify-self: center;
+}

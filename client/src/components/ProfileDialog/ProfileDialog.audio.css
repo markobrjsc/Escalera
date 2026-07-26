@@ -1,0 +1,46 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.profile-actions {
+	display: grid;
+	width: 100%;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-2);
+}
+
+.profile-audio {
+	display: grid;
+	width: 100%;
+	gap: var(--space-2);
+	border: var(--hair) solid #52796f88;
+	border-radius: var(--radius-sm);
+	padding: var(--space-2);
+	background: linear-gradient(145deg, #52796f18, #0b0d0c99);
+	box-shadow: 0 0 0 1px #ffffff08 inset;
+}
+
+.profile-audio-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
+
+.profile-audio-title h3 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--t-md);
+	letter-spacing: .035em;
+}
+
+.audio-mute {
+	min-height: calc(.78 * var(--control-height));
+	border-color: #8e9b96;
+	color: var(--color-white);
+	font-size: var(--t-xs);
+}
+
+.audio-mute.is-active {
+	border-color: var(--color-waiting);
+	background: #6b583633;
+	color: var(--color-waiting);
+}

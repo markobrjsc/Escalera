@@ -1,0 +1,35 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.settings-form {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+
+.settings-form > button {
+	grid-column: 1;
+}
+
+.settings-form .dialog-divider {
+	width: 100%;
+}
+
+.toggle {
+	display: flex;
+	min-height: var(--control-height);
+	align-items: center;
+	gap: .65rem;
+	border: var(--border);
+	padding: .5rem .7rem;
+}
+
+.toggle input {
+	width: 1.2rem;
+	min-height: auto;
+	accent-color: var(--color-teal);
+}
+
+.settings-form .toggle:last-of-type {
+	display: none;
+}

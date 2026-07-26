@@ -1,0 +1,125 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* The stack: layered under-cards give real, countable depth. The draw pile is
+   a squared-up deck (sub-pixel jitter, edges peeking below), the discard a
+   loose drop pile — every layer keeps the angle it originally landed with
+   (deterministic per absolute pile position, see cards.tsx). */
+.pile-stack {
+	--depth: calc(var(--pile-fill, 0) * var(--max-depth));
+	--pile-lift: calc(.11 * var(--u));
+	position: relative;
+	display: block;
+	width: 100%;
+	height: 100%;
+	border-radius: calc(.5 * var(--u));
+}
+
+/* Two connected surfaces form a real deck body: ::before is the layered front
+   edge below the top card, ::after the narrow right edge. No duplicate card
+   backs are used for a neat draw pile. */
+.pile-stack::before {
+	content: "";
+	position: absolute;
+	z-index: 0;
+	left: calc(.16 * var(--u));
+	right: calc(.02 * var(--u));
+	top: calc(100% - 1px);
+	height: max(2px, var(--depth));
+	border: 1px solid #999990;
+	border-top: 0;
+	border-radius: 0 0 calc(.42 * var(--u)) calc(.42 * var(--u));
+	background: repeating-linear-gradient(to bottom, #f4f4ec 0 1px, #b8b8af 1px 2px, #e7e7df 2px 3px);
+	box-shadow: calc(.22 * var(--u)) calc(.38 * var(--u)) calc(.65 * var(--u)) #000b;
+}
+
+.pile-stack::after {
+	content: "";
+	position: absolute;
+	z-index: 0;
+	left: calc(100% - 1px);
+	top: calc(.18 * var(--u));
+	width: calc(.42 * var(--u));
+	height: calc(100% + var(--depth) - .2 * var(--u));
+	border: 1px solid #999990;
+	border-left: 0;
+	border-radius: 0 calc(.35 * var(--u)) calc(.38 * var(--u)) 0;
+	background: repeating-linear-gradient(to right, #ededE5 0 1px, #adada5 1px 2px, #deded6 2px 3px);
+	box-shadow: calc(.2 * var(--u)) calc(.25 * var(--u)) calc(.5 * var(--u)) #0009;
+}
+
+.pile-stack.is-empty::before,
+.pile-stack.is-empty::after {
+	display: none;
+}
+
+.pile-stack.is-empty {
+	display: grid;
+	place-items: center;
+}
+
+.pile-layer,
+.pile-top {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	transform: translate(var(--layer-x, 0), var(--layer-y, 0)) rotate(var(--layer-r, 0deg));
+}
+
+.pile-layer.is-back img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border-radius: inherit;
+	object-fit: cover;
+	filter: brightness(.72);
+}
+
+.pile-layer.is-face {
+	overflow: hidden;
+	border: 1px solid #b9b9ad;
+	background: linear-gradient(160deg, #f6f6ee 0%, #e9e9dd 70%, #d9d9cc 100%);
+	box-shadow: 0 2px 5px #0007;
+}
+
+.pile-layer.is-face::after {
+	content: "";
+	position: absolute;
+	inset: 7%;
+	border: 1px solid #9d313144;
+	border-radius: 3%;
+}
+
+.pile-stack.is-messy .pile-layer,
+.pile-stack.is-messy .pile-top .card-face {
+	box-shadow: 0 calc(.18 * var(--u)) calc(.4 * var(--u)) #0008;
+}
+
+.pile-top img,
+.pile-top .card-face {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border-radius: inherit;
+	object-fit: cover;
+	box-shadow: 0 1px calc(.25 * var(--u)) #0007;
+}
+
+.pile-stack.is-neat .pile-top {
+	border: max(1px, var(--hair)) solid #b7b7ae;
+	box-shadow: 1px 1px 0 #efefe7;
+}
+
+.pile-empty {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	border: var(--hair) dashed var(--color-muted);
+	border-radius: inherit;
+	color: var(--color-muted);
+}
+
+.pile-station b {
+	color: var(--color-white);
+	font-size: var(--t-sm);
+}

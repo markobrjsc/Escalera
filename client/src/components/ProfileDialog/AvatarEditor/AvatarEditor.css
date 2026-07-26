@@ -1,0 +1,64 @@
+.profile-preview {
+	position: relative;
+	display: grid;
+	place-items: center;
+}
+
+.profile-preview > img {
+	width: clamp(6rem, 25vmin, 9rem);
+	aspect-ratio: 1;
+	border: var(--border);
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.avatar-edit-button {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	z-index: 1;
+	display: grid;
+	width: 2.1rem;
+	min-width: 0;
+	min-height: 0;
+	aspect-ratio: 1;
+	place-items: center;
+	border: var(--border);
+	border-radius: 50%;
+	padding: 0;
+	background: var(--color-teal);
+	color: var(--color-white);
+}
+
+.avatar-actions {
+	position: absolute;
+	z-index: 2;
+	top: 50%;
+	left: calc(100% + var(--space-2));
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: .35rem;
+	width: max-content;
+	min-width: 8.5rem;
+	border: 1px solid var(--color-teal);
+	border-radius: var(--radius-md);
+	padding: .45rem;
+	background: var(--color-onyx);
+	box-shadow: 0 .4rem 1.2rem #0008;
+	transform: translateY(-50%);
+}
+
+.avatar-actions .button,
+.avatar-actions button {
+	min-height: 2rem;
+	padding-inline: .65rem;
+	font-size: var(--font-xs);
+}
+
+.avatar-actions input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}

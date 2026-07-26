@@ -1,0 +1,38 @@
+.lobby-layout .members-panel {
+	width: 100%;
+	align-self: auto;
+	padding: var(--space-3);
+}
+
+.lobby-layout .member-list {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	max-height: none;
+	gap: var(--space-2);
+	overflow-x: hidden;
+}
+
+.lobby-player-title {
+	position: relative;
+	justify-content: center;
+	min-height: 2.4rem;
+}
+
+.lobby-player-title > span {
+	position: absolute;
+	right: 0;
+}
+
+.members-panel {
+	min-height: 0;
+	align-self: start;
+	padding: var(--space-2);
+	overflow: hidden;
+}
+
+.member-list {
+	display: grid;
+	max-height: 48dvh;
+	gap: var(--space-1);
+	overflow-y: auto;
+	padding-top: var(--space-2);
+}

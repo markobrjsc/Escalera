@@ -1,0 +1,16 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* The ghost is the picked-up card: full size, a natural tilt, sitting just above
+   the cursor — not a shrunken upright jump. */
+.drag-ghost {
+	position: fixed;
+	z-index: 90;
+	width: var(--card-w);
+	height: var(--card-h);
+	border: none;
+	background: none;
+	transform: translate(-50%, -55%) rotate(-4deg);
+	pointer-events: none;
+	box-shadow: 0 0 0 max(3px, calc(.22 * var(--u))) var(--color-select), 0 0 calc(1.4 * var(--u)) var(--color-select), 0 calc(.5 * var(--u)) calc(.5 * var(--u)) #000a;
+	border-radius: 4%;
+}

@@ -1,0 +1,48 @@
+.fx-layer {
+	position: fixed;
+	inset: 0;
+	z-index: 88;
+	overflow: hidden;
+	pointer-events: none;
+	perspective: 1300px;
+}
+
+.fx-flight {
+	position: absolute;
+	left: 0;
+	top: 0;
+	aspect-ratio: 5 / 7;
+	overflow: visible;
+	transform-origin: top left;
+	will-change: transform;
+	filter: drop-shadow(0 .35rem .5rem #0009);
+}
+
+.fx-flight-inner {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	transform-style: preserve-3d;
+	will-change: transform;
+}
+
+.fx-face {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	border-radius: 5%;
+	backface-visibility: hidden;
+}
+
+.fx-back {
+	transform: rotateY(180deg);
+}
+
+/* Ankommende Karten existieren schon im Layout, bleiben aber unsichtbar, bis
+ihr Flug auf ihnen landet. */
+.playing-card.is-incoming,
+.card-face.is-incoming {
+	visibility: hidden;
+}

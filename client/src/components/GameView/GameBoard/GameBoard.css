@@ -1,0 +1,34 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* 2.5D: the board sits on a receding table. A gentle rotateX tilts the play area
+   back so piles and cards show a little of their top edge and thickness. Flight
+   anchors read screen-space rects, so the tilt does not disturb the animations. */
+.game-board {
+	height: 115%;
+	display: grid;
+	min-height: 0;
+	grid-template-columns: var(--card-w) minmax(0, 1fr) var(--card-w);
+	gap: var(--gap);
+	transform: perspective(1600px) rotateX(25deg);
+	transform-origin: center 52%;
+	transform-style: preserve-3d;
+}
+
+.pile-station {
+	display: grid;
+	align-self: center;
+	min-width: 0;
+	justify-items: center;
+	gap: calc(2 * var(--u));
+	color: var(--color-muted);
+	font-size: var(--t-xs);
+	font-weight: 900;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+}
+
+.pile-station > span {
+	max-width: calc(var(--card-w) + 3 * var(--u));
+	font-size: clamp(.48rem, var(--t-xs), .7rem);
+	white-space: nowrap;
+}

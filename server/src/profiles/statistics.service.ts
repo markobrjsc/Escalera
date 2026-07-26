@@ -2,15 +2,12 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service.js";
 import type { GameState } from "../game/game-state.js";
-
-// Every coin a player still holds at the end converts to penalty points; the
-// coin-penalty branch tracks the accumulated total across all games.
-const COIN_PENALTY = 30;
+import { compensatedPenaltyForPlayer } from "../game/penalty-compensation.js";
 
 type StatBag = {
   gamesPlayed: number; gamesWon: number; podiumFinishes: number; totalPenalty: number;
   phasesLaid: number; meldsLaid: number; jokersPlayed: number; cardsBought: number;
-  timeouts: number; reconnects: number; movesPlayed: number; coinPenalty: number;
+  timeouts: number; reconnects: number; movesPlayed: number; compensatedPenalty: number;
   longestStreet: number; phaseWinsMask: number;
 };
 
@@ -32,7 +29,7 @@ export const ACHIEVEMENT_TREE: Branch[] = [
   { key: "wins", title: "Siege", kind: "gte", stat: "gamesWon", nodes: [1, 3, 5, 10, 25, 50, 100], label: (n) => `${n} ${n === 1 ? "Sieg" : "Siege"}` },
   { key: "market", title: "Marktgänger", kind: "gte", stat: "cardsBought", nodes: [5, 25, 100], label: (n) => `${n} Käufe` },
   { key: "penalty", title: "Strafpunkte", kind: "gte", stat: "totalPenalty", nodes: [50, 100, 500, 1000, 1500, 2000, 5000, 10000], label: (n) => `${n} Strafpunkte` },
-  { key: "coins", title: "Münz-Strafe", kind: "gte", stat: "coinPenalty", nodes: [60, 300, 600, 1200, 2400, 4800], label: (n) => `${n} aus Münzen` },
+  { key: "coins", title: "Kompensierte Strafpunkte", kind: "gte", stat: "compensatedPenalty", nodes: [60, 300, 600, 1200, 2400, 4800], label: (n) => `${n} kompensierte Strafpunkte` },
   { key: "moves", title: "Züge", kind: "gte", stat: "movesPlayed", nodes: [50, 100, 200, 500, 1000], label: (n) => `${n} Züge` }
 ];
 
@@ -84,13 +81,13 @@ export class StatisticsService {
         timeouts: player.timeouts - previous.timeouts,
         reconnects: player.disconnectSkips - previous.disconnectSkips,
         movesPlayed: player.metrics.movesPlayed - previous.metrics.movesPlayed,
-        coinPenalty: finished ? player.coins * COIN_PENALTY : 0
+        compensatedPenalty: finished ? compensatedPenaltyForPlayer(after, player.userId) : 0
       };
       const longestStreet = Math.max(existing?.longestStreet ?? 0, player.metrics.longestStreet);
       await tx.userStatistic.upsert({
         where: { userId: player.userId },
         create: { userId: player.userId, ...values, longestStreet, phaseWinsMask },
-        update: { gamesWon: { increment: values.gamesWon }, podiumFinishes: { increment: values.podiumFinishes }, totalPenalty: { increment: values.totalPenalty }, phasesLaid: { increment: values.phasesLaid }, meldsLaid: { increment: values.meldsLaid }, jokersPlayed: { increment: values.jokersPlayed }, cardsBought: { increment: values.cardsBought }, timeouts: { increment: values.timeouts }, reconnects: { increment: values.reconnects }, movesPlayed: { increment: values.movesPlayed }, coinPenalty: { increment: values.coinPenalty }, longestStreet, phaseWinsMask }
+        update: { gamesWon: { increment: values.gamesWon }, podiumFinishes: { increment: values.podiumFinishes }, totalPenalty: { increment: values.totalPenalty }, phasesLaid: { increment: values.phasesLaid }, meldsLaid: { increment: values.meldsLaid }, jokersPlayed: { increment: values.jokersPlayed }, cardsBought: { increment: values.cardsBought }, timeouts: { increment: values.timeouts }, reconnects: { increment: values.reconnects }, movesPlayed: { increment: values.movesPlayed }, compensatedPenalty: { increment: values.compensatedPenalty }, longestStreet, phaseWinsMask }
       });
       const stored = await tx.userStatistic.findUniqueOrThrow({ where: { userId: player.userId } });
       const already = new Set((await tx.achievementProgress.findMany({ where: { userId: player.userId }, select: { achievement: true } })).map((row) => row.achievement));
@@ -113,10 +110,11 @@ export class StatisticsService {
             longestStreet: Math.max(before?.longestStreet ?? 0, player.metrics.longestStreet),
             phaseWinsMask: (before?.phaseWinsMask ?? 0) | wonPhases
           };
+          const compensatedPenalty = compensatedPenaltyForPlayer(state, player.userId);
           await tx.userStatistic.upsert({
             where: { userId: player.userId },
-            create: { userId: player.userId, gamesWon: placement === 1 ? 1 : 0, podiumFinishes: placement <= 3 ? 1 : 0, totalPenalty: player.totalPenalty, phasesLaid: player.metrics.phasesLaid, meldsLaid: player.metrics.meldsLaid, jokersPlayed: player.metrics.jokersPlayed, cardsBought: player.metrics.cardsBought, timeouts: player.timeouts, reconnects: player.disconnectSkips, movesPlayed: player.metrics.movesPlayed, coinPenalty: player.coins * COIN_PENALTY, ...merged },
-            update: { gamesWon: { increment: placement === 1 ? 1 : 0 }, podiumFinishes: { increment: placement <= 3 ? 1 : 0 }, totalPenalty: { increment: player.totalPenalty }, phasesLaid: { increment: player.metrics.phasesLaid }, meldsLaid: { increment: player.metrics.meldsLaid }, jokersPlayed: { increment: player.metrics.jokersPlayed }, cardsBought: { increment: player.metrics.cardsBought }, timeouts: { increment: player.timeouts }, reconnects: { increment: player.disconnectSkips }, movesPlayed: { increment: player.metrics.movesPlayed }, coinPenalty: { increment: player.coins * COIN_PENALTY }, ...merged }
+            create: { userId: player.userId, gamesWon: placement === 1 ? 1 : 0, podiumFinishes: placement <= 3 ? 1 : 0, totalPenalty: player.totalPenalty, phasesLaid: player.metrics.phasesLaid, meldsLaid: player.metrics.meldsLaid, jokersPlayed: player.metrics.jokersPlayed, cardsBought: player.metrics.cardsBought, timeouts: player.timeouts, reconnects: player.disconnectSkips, movesPlayed: player.metrics.movesPlayed, compensatedPenalty, ...merged },
+            update: { gamesWon: { increment: placement === 1 ? 1 : 0 }, podiumFinishes: { increment: placement <= 3 ? 1 : 0 }, totalPenalty: { increment: player.totalPenalty }, phasesLaid: { increment: player.metrics.phasesLaid }, meldsLaid: { increment: player.metrics.meldsLaid }, jokersPlayed: { increment: player.metrics.jokersPlayed }, cardsBought: { increment: player.metrics.cardsBought }, timeouts: { increment: player.timeouts }, reconnects: { increment: player.disconnectSkips }, movesPlayed: { increment: player.metrics.movesPlayed }, compensatedPenalty: { increment: compensatedPenalty }, ...merged }
           });
 
           const after = await tx.userStatistic.findUniqueOrThrow({ where: { userId: player.userId } });
@@ -156,7 +154,7 @@ export class StatisticsService {
       gamesPlayed: stored?.gamesPlayed ?? 0, gamesWon: stored?.gamesWon ?? 0, podiumFinishes: stored?.podiumFinishes ?? 0,
       totalPenalty: stored?.totalPenalty ?? 0, phasesLaid: stored?.phasesLaid ?? 0, meldsLaid: stored?.meldsLaid ?? 0,
       jokersPlayed: stored?.jokersPlayed ?? 0, cardsBought: stored?.cardsBought ?? 0, timeouts: stored?.timeouts ?? 0,
-      reconnects: stored?.reconnects ?? 0, movesPlayed: stored?.movesPlayed ?? 0, coinPenalty: stored?.coinPenalty ?? 0,
+      reconnects: stored?.reconnects ?? 0, movesPlayed: stored?.movesPlayed ?? 0, compensatedPenalty: stored?.compensatedPenalty ?? 0,
       longestStreet: stored?.longestStreet ?? 0, phaseWinsMask: stored?.phaseWinsMask ?? 0
     };
     const unlockedAt = new Map(progress.map((row) => [row.achievement, row.unlockedAt?.toISOString() ?? null]));

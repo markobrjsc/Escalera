@@ -4,6 +4,29 @@ import { AuthenticatedRequest, SessionGuard } from "../auth/session.guard.js";
 import { ProfilesService } from "./profiles.service.js";
 import { StatisticsService } from "./statistics.service.js";
 import { AudioPreferencesDto } from "./audio-preferences.dto.js";
+import { TutorialProgressDto } from "./tutorial-progress.dto.js";
+import { isAdminUsername } from "../auth/auth.types.js";
+
+type OwnUser = {
+  id: string;
+  username: string;
+  avatarKey: string | null;
+  tutorialCompleted: boolean;
+  tutorialStep: number;
+  tutorialReadMask: number;
+};
+
+function ownUser(user: OwnUser) {
+  return {
+    id: user.id,
+    username: user.username,
+    avatarKey: user.avatarKey,
+    tutorialCompleted: user.tutorialCompleted,
+    tutorialStep: user.tutorialStep,
+    tutorialReadMask: user.tutorialReadMask,
+    isAdmin: isAdminUsername(user.username)
+  };
+}
 
 @Controller("profile")
 @UseGuards(SessionGuard)
@@ -40,19 +63,31 @@ export class ProfilesController {
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
   async uploadAvatar(@Req() request: AuthenticatedRequest, @UploadedFile() file: Express.Multer.File) {
     const user = await this.profiles.uploadAvatar(request.user.id, file);
-    return { user: { id: user.id, username: user.username, avatarKey: user.avatarKey, tutorialCompleted: user.tutorialCompleted } };
+    return { user: ownUser(user) };
   }
 
   @Delete("avatar")
   async deleteAvatar(@Req() request: AuthenticatedRequest) {
     const user = await this.profiles.deleteAvatar(request.user.id);
-    return { user: { id: user.id, username: user.username, avatarKey: user.avatarKey, tutorialCompleted: user.tutorialCompleted } };
+    return { user: ownUser(user) };
+  }
+
+  @Put("tutorial")
+  async updateTutorialProgress(@Req() request: AuthenticatedRequest, @Body() input: TutorialProgressDto) {
+    const user = await this.profiles.updateTutorialProgress(request.user.id, input);
+    return { user: ownUser(user) };
   }
 
   @Post("tutorial/complete")
-  async completeTutorial(@Req() request: AuthenticatedRequest) {
-    const user = await this.profiles.completeTutorial(request.user.id);
-    return { user: { id: user.id, username: user.username, avatarKey: user.avatarKey, tutorialCompleted: user.tutorialCompleted } };
+  async completeTutorial(@Req() request: AuthenticatedRequest, @Body() input: TutorialProgressDto) {
+    const user = await this.profiles.completeTutorial(request.user.id, input);
+    return { user: ownUser(user) };
+  }
+
+  @Post("tutorial/reset")
+  async resetTutorial(@Req() request: AuthenticatedRequest) {
+    const user = await this.profiles.resetTutorial(request.user.id);
+    return { user: ownUser(user) };
   }
 
   @Get("avatar/:userId")

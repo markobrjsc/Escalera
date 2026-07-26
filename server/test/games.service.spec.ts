@@ -24,6 +24,26 @@ function harness(state: GameState) {
 }
 
 describe("versionssichere Spielbefehle", () => {
+  it("persistiert das verbleibende Münzbudget und projiziert es bei erneutem Abruf", async () => {
+    const state = createInitialGameState(["p1", "p2"], 1, () => 0, 60, 0);
+    state.activePlayerId = "p2";
+    state.discardOffer = { cardId: state.discardPile[0].id, offeredById: "p1" };
+    const { service, prisma, game } = harness(state);
+    const command = { commandId: "coin-buy", expectedVersion: 1 };
+
+    const bought = await service.buy("p1", "ABC", command);
+    const restored = await service.buy("p1", "ABC", command);
+
+    expect(bought.state.players.find((player) => player.userId === "p1")?.coins).toBe(6);
+    expect(game.state.players.find((player) => player.userId === "p1")?.coins).toBe(6);
+    expect(restored).toMatchObject({
+      version: 2,
+      duplicate: true,
+      state: { players: expect.arrayContaining([expect.objectContaining({ userId: "p1", coins: 6 })]) }
+    });
+    expect(prisma.game.updateMany).toHaveBeenCalledTimes(1);
+  });
+
   it("verarbeitet dieselbe Befehlskennung höchstens einmal und veröffentlicht die Zugquelle", async () => {
     const state = createInitialGameState(["p1", "p2"], 1, () => 0, 60, 0);
     state.activePlayerId = "p1";

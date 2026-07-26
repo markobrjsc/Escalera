@@ -10,13 +10,26 @@ Ab sofort bearbeiten wir standardmäßig nur noch GitHub-Tickets. Nur wenn ausdr
 
 Die Zusammenarbeit findet immer im bestehenden Codex-Task statt. Ein einzelner Task darf mehrere Tickets nacheinander bearbeiten. Es ist kein neuer Prompt oder neuer Task erforderlich.
 
+## Branch-Modell
+
+Es gibt zwei langlebige Branches:
+
+- **`development`** – Standard- und Integrationsbranch. Alle Ticket-Branches gehen von `development` aus und werden per Pull Request wieder nach `development` gemergt.
+- **`main`** – reiner Release- und Produktionsbranch. **Jeder Merge nach `main` löst automatisch ein Live-Produktions-Deployment aus.** Es wird **niemals direkt** nach `main` gearbeitet, gepusht oder gemergt.
+
+Wenn auf `development` genug geprüfte Änderungen zusammengekommen sind, wird ein bewusster Release-Pull-Request `development` → `main` geöffnet. Erst dessen Merge – nach ausdrücklicher Freigabe – bringt die Änderungen in die Produktion.
+
+```text
+ticket/<Nummer>  ──PR──▶  development  ──Release-PR──▶  main  ──▶  Auto-Deploy
+```
+
 ## Ablauf eines Tickets
 
 | Schritt | Verantwortlich | Ergebnis |
 |---:|---|---|
 | 1 | Codex | Konkretes Ticket wird vorgeschlagen oder angelegt. |
 | 2 | Nutzer | Gibt die Arbeit in natürlicher Sprache frei, zum Beispiel „Bearbeite #12“. |
-| 3 | Codex | Erstellt einen Arbeitsbranch von `main`. |
+| 3 | Codex | Erstellt einen Arbeitsbranch von `development`. |
 | 4 | Beide | Klären Fragen und prüfen Zwischenergebnisse bis zur Zufriedenheit. |
 | 5 | Codex | Prüft Änderungen und relevante Tests. |
 | 6 | Nutzer | Gibt den Abschluss ausdrücklich frei. |
@@ -28,7 +41,7 @@ Die Zusammenarbeit findet immer im bestehenden Codex-Task statt. Ein einzelner T
 
 ## Branches
 
-Jedes neu begonnene Arbeitspaket erhält einen Branch von `main`:
+Jedes neu begonnene Arbeitspaket erhält einen Branch von `development`:
 
 ```text
 ticket/<Nummer>-<kurzer-kebab-name>
@@ -67,7 +80,7 @@ Es gibt zwei bewusst getrennte Freigabepunkte:
 
 1. **Arbeitsfreigabe:** Eine eindeutige natürliche Freigabe erlaubt die Arbeit auf dem Ticket-Branch.
 2. **Abschlussfreigabe:** erlaubt Commit, Push und Pull Request.
-3. **Mergefreigabe:** erlaubt Merge nach `main` und das Löschen des Branches.
+3. **Mergefreigabe:** erlaubt Merge nach `development` und das Löschen des Branches. Ein Merge nach `main` (Release) ist ein eigener, ausdrücklich freizugebender Schritt.
 
 Die Freigabepunkte dürfen in einer einzigen Nachricht gebündelt werden. Wenn der Nutzer eindeutig Commit, Push, Merge und Branch-Löschung erlaubt, führt Codex diese Schritte ohne eine zusätzliche Nachricht aus.
 

@@ -8,6 +8,7 @@
     "dev": "vite",
     "prebuild": "npm run build --workspace=@escalera/game-rules",
     "build": "tsc --noEmit && vite build",
+    "pretest": "npm run build --workspace=@escalera/game-rules",
     "test": "vitest run",
     "pretypecheck": "npm run build --workspace=@escalera/game-rules",
     "typecheck": "tsc --noEmit"
@@ -18,11 +19,13 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "socket.io-client": "^4.8.1",
+    "three": "^0.185.1",
     "vite": "^7.0.6",
     "vite-plugin-pwa": "^1.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6"
+    "@types/react-dom": "^19.1.6",
+    "@types/three": "^0.185.1"
   }
 }

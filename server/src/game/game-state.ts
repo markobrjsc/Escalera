@@ -39,6 +39,7 @@ export interface FinalPlacement {
   userId: string;
   rank: number;
   totalPenalty: number;
+  compensatedPenalty: number;
 }
 
 export interface GameState {
@@ -132,7 +133,7 @@ export function normalizeGameState(state: GameState): GameState {
     discardOffer: state.discardOffer ?? null,
     roundEndedById: state.roundEndedById ?? null,
     roundResults: state.roundResults ?? [],
-    placements: state.placements ?? [],
+    placements: (state.placements ?? []).map((placement) => ({ ...placement, compensatedPenalty: placement.compensatedPenalty ?? 0 })),
     processedCommands: state.processedCommands ?? [],
     recentActions: state.recentActions ?? []
   };

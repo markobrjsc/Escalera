@@ -1,0 +1,36 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* Contextual player controls are shared by lobby seats and game seats. */
+.player-card-backdrop {
+	z-index: 75;
+}
+
+.player-interaction-card {
+	display: grid;
+	width: min(92vw, 26rem);
+	gap: var(--space-2);
+	padding: var(--space-3);
+	box-shadow: 0 1rem 3rem #000b;
+}
+
+.player-card-identity {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.player-card-identity h2,
+.player-card-identity p {
+	margin: 0;
+}
+
+.player-card-identity .profile-icon-large {
+	width: clamp(3.2rem, 14vw, 4.8rem);
+	height: clamp(3.2rem, 14vw, 4.8rem);
+}
+
+.player-profile-action,
+.player-kick-action {
+	width: 100%;
+}

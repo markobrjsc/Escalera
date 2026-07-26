@@ -14,6 +14,8 @@ model User {
   passwordHash       String
   avatarKey          String?
   tutorialCompleted  Boolean               @default(false)
+  tutorialStep       Int                   @default(0)
+  tutorialReadMask   Int                   @default(0)
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
   sessions           Session[]
@@ -119,7 +121,7 @@ model UserStatistic {
   timeouts        Int      @default(0)
   reconnects      Int      @default(0)
   movesPlayed     Int      @default(0)
-  coinPenalty     Int      @default(0)
+  compensatedPenalty Int      @default(0) @map("coinPenalty")
   longestStreet   Int      @default(0)
   phaseWinsMask   Int      @default(0)
   updatedAt       DateTime @updatedAt

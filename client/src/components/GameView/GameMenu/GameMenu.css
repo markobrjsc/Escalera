@@ -1,0 +1,40 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.game-nav {
+	position: absolute;
+	z-index: 20;
+	left: max(var(--edge), env(safe-area-inset-left));
+	bottom: max(var(--edge), env(safe-area-inset-bottom));
+	display: flex;
+	max-width: var(--side-lane);
+	gap: calc(.5 * var(--u));
+}
+
+.game-nav-button {
+	min-width: 0;
+	min-height: var(--ctrl);
+	border: var(--hair) solid var(--color-teal);
+	border-radius: var(--radius-sm);
+	padding-inline: var(--u);
+	font-size: var(--t-xs);
+}
+
+.game-nav-button > span {
+	margin-left: calc(.35 * var(--u));
+}
+
+.menu-sort {
+	display: grid;
+	gap: clamp(.4rem, 1.2vmin, .7rem);
+	border: var(--hair) solid #52796f99;
+	border-radius: var(--radius-sm);
+	padding: clamp(.45rem, 1.4vmin, .75rem);
+	background: #20312d66;
+	box-shadow: inset 0 1px 0 #ffffff0d;
+}
+
+.menu-sort > .hud-kicker {
+	color: var(--color-white);
+	font-size: clamp(.76rem, 1.45vw, .95rem);
+	letter-spacing: .09em;
+}

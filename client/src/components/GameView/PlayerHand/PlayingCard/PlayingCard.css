@@ -1,0 +1,80 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* Hand fan: each card's signed distance from the middle (--pos) drives both a
+   small rotation (outer cards more, middle upright) and a downward arc (middle
+   sits highest), matching a real fanned hand. Horizontal overlap is unchanged. */
+.playing-card {
+	--card-step: min(var(--card-w), calc((var(--hand-span) - var(--card-w)) / max(1, var(--card-count, 11) - 1)));
+	--mid: calc((var(--card-count, 11) - 1) / 2);
+	--pos: calc(var(--card-index, 0) - var(--mid));
+	--fan-rot: calc(var(--pos) * 1.6deg);
+	--arc: calc(var(--pos) * var(--pos) * .28 * var(--u));
+	flex: 0 0 auto;
+	width: var(--card-w);
+	height: var(--card-h);
+	min-width: 0;
+	min-height: 0;
+	margin-left: calc(var(--card-step) - var(--card-w));
+	transform-origin: 50% 190%;
+	transform: translateY(calc(var(--arc) + var(--card-lift, 0px))) rotate(var(--fan-rot));
+	z-index: calc(var(--card-index, 0) + 1);
+	overflow: hidden;
+	border: none;
+	padding: 0;
+	background: transparent;
+	touch-action: none;     /* stacked bottom edge = paper thickness */
+	box-shadow: 0 calc(.12 * var(--u)) 0 #c9c9c9, 0 calc(.26 * var(--u)) 0 #a5a5a5, 0 calc(.42 * var(--u)) calc(.3 * var(--u)) #0007;
+	transition: --card-lift .2s ease, box-shadow .18s ease;
+}
+
+/* Registering the lift makes it a real animatable <length>, so the transform that
+   reads it interpolates smoothly instead of snapping when hover/selection changes. */
+@property --card-lift {
+	syntax: "<length>";
+	inherits: false;
+	initial-value: 0px;
+}
+
+.playing-card:first-child {
+	margin-left: 0;
+}
+
+.card-3d {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+/* Highlight: a minimal, consistent lift to the front (no behind-render, so edge
+   cards behave), plus a solid purple ring and glow. */
+.playing-card:hover,
+.playing-card:active {
+	border-radius: 4%;
+	--card-lift: calc(-1.6 * var(--u));
+	box-shadow: 0 0 0 max(3px, calc(.22 * var(--u))) var(--color-select), 0 0 calc(1.0 * var(--u)) var(--color-target), 0 calc(.42 * var(--u)) calc(.3 * var(--u)) #0007;
+}
+
+/* Bugfix (#50): the global `button:active { transform: translateY(1px) }` has
+   higher specificity than the base .playing-card rule, so pressing a card used
+   to zero its fan rotation. Restating the fan transform for :active keeps the
+   card exactly in its fan pose while clicked. */
+.playing-card:active {
+	transform: translateY(calc(var(--arc) + var(--card-lift, 0px))) rotate(var(--fan-rot));
+	background: transparent;
+}
+
+.playing-card.is-selected {
+	border-radius: 4%;
+	--card-lift: calc(-10 * var(--u));
+	box-shadow: 0 0 0 max(2px, calc(.3 * var(--u))) var(--color-select), 0 0 calc(2.4 * var(--u)) var(--color-select), 0 calc(.42 * var(--u)) calc(.3 * var(--u)) #0008;
+}
+
+.playing-card:focus-visible {
+	z-index: 61;
+	outline: max(2px, calc(.25 * var(--u))) solid var(--color-select);
+	outline-offset: calc(.1 * var(--u));
+}
+
+.playing-card.is-dragged {
+	opacity: .35;
+}
