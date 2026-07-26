@@ -12,7 +12,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "prompt",
+      // "prompt" hätte die Anwendung verlangt, die wartende Version per
+      // SKIP_WAITING freizugeben. Genau das ist nie passiert, weshalb der
+      // Service Worker dauerhaft das alte index.html samt alter Asset-Hashes
+      // auslieferte und Deployments Besucher nicht erreichten (#101).
+      registerType: "autoUpdate",
       manifest: {
         name: "Escalera",
         short_name: "Escalera",
@@ -37,7 +41,13 @@ export default defineConfig({
         // WebGL2 is checked before this lazy chunk is requested. Keeping the
         // renderer out of the install precache also keeps fallback devices
         // from downloading half a megabyte they cannot execute.
-        globIgnores: ["**/createThreeScene-*.js"]
+        globIgnores: ["**/createThreeScene-*.js"],
+        // Ohne diese beiden Schalter bliebe eine neue Fassung auch bei
+        // autoUpdate hinter dem bereits laufenden Service Worker stehen, bis
+        // alle Tabs geschlossen sind. So löst sie die alte sofort ab — nötig,
+        // um die bereits ausgelieferten veralteten Worker einzusammeln.
+        skipWaiting: true,
+        clientsClaim: true
       }
     })
   ],
