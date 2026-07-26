@@ -32,7 +32,11 @@ export function reducedMotionActive() { return window.matchMedia("(prefers-reduc
 
 export function initMotionPreference() {
   const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const apply = () => document.documentElement.classList.toggle("motion-reduced", query.matches && !motionOverride());
+  const apply = () => {
+    const full = motionOverride();
+    document.documentElement.classList.toggle("motion-full", full);
+    document.documentElement.classList.toggle("motion-reduced", query.matches && !full);
+  };
   apply();
   query.addEventListener("change", apply);
 }

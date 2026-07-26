@@ -18,6 +18,7 @@ import { GameView } from "./components/GameView/GameView.js";
 import { PlayerInteractionCard } from "./components/PlayerInteractionCard/PlayerInteractionCard.js";
 import { ProfileDialog } from "./components/ProfileDialog/ProfileDialog.js";
 import { TutorialDialog } from "./components/TutorialDialog/TutorialDialog.js";
+import { ThreeExperience } from "./visual3d/ThreeExperience.js";
 
 // The composition root: session, lobby and game state plus the realtime socket.
 // It picks the active screen and mounts the shared overlays; every screen and
@@ -187,7 +188,10 @@ export function App() {
   const [booted, setBooted] = useState(false);
   useEffect(() => { if (viewKey !== "access") setBooted(true); }, [viewKey]);
 
-  if (loading) return <main className="portrait-view centered"><p className="brand">Escalera</p></main>;
+  if (loading) return <>
+    <ThreeExperience scene={viewKey} reducedMotion={reduced} />
+    <main className="portrait-view centered"><p className="brand">Escalera</p></main>
+  </>;
   const selectedPlayer = lobby?.players.find((player) => player.user.id === playerCardUserId)?.user ?? null;
   const view = !user
     ? <AccessView intro={!booted} error={error} setError={setError} onAccess={(next, created) => { setUser(next); if (created) setTutorialOpen(true); }} />
@@ -197,6 +201,7 @@ export function App() {
         ? <LobbyView user={user} lobby={lobby} connected={connected} voice={voice} error={error} setError={setError} onLeave={leaveLobby} onProfile={setPlayerCardUserId} />
         : <LobbyListView user={user} connected={connected} revision={lobbyRevision} error={error} setError={setError} onLobby={openLobby} onLogout={logout} onProfile={() => setProfileUserId(user.id)} />;
   return <>
+    <ThreeExperience scene={viewKey} reducedMotion={reduced} />
     <SlideStage viewKey={viewKey}>{view}</SlideStage>
     {lobby && game && lobby.status !== "OPEN" && <VoiceStatus voice={voice} variant="game" />}
     {matchIntro && game && <MatchStartOverlay round={game.state.round} phase={game.state.phase} />}

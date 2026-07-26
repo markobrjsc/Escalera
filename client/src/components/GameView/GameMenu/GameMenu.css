@@ -38,22 +38,3 @@
 	font-size: clamp(.76rem, 1.45vw, .95rem);
 	letter-spacing: .09em;
 }
-
-.menu-sort .sort-control {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: var(--space-1);
-}
-
-.menu-sort .sort-control button {
-	min-height: max(44px, calc(.88 * var(--control-height)));
-	border-color: var(--color-muted);
-	padding: .38rem .45rem;
-	font-size: clamp(.74rem, 1.35vw, .92rem);
-	font-weight: 900;
-}
-
-.menu-sort .sort-control button.is-active {
-	border-color: var(--color-teal);
-	background: var(--color-teal);
-}

@@ -1,1 +1,28 @@
-/* Empty-seat styles remain in the parent LobbyView.css. */
+.member-slot-empty {
+	display: grid;
+	grid-template-columns: 1fr !important;
+	grid-template-rows: auto auto auto !important;
+	place-content: center;
+	justify-items: center;
+	gap: .2rem;
+	border-width: 1px !important;
+	border-style: dashed !important;
+	border-color: var(--color-muted) !important;
+	background: var(--color-onyx) !important;
+	color: var(--color-muted) !important;
+}
+
+.member-slot-empty .empty-seat-icon {
+	display: grid;
+	width: 2.4rem;
+	aspect-ratio: 1;
+	place-items: center;
+	border: 1px dashed currentColor;
+	border-radius: 50%;
+	font-size: 1.5rem;
+	line-height: 1;
+}
+
+.member-slot-empty > span:last-child {
+	font-size: var(--font-xs);
+}

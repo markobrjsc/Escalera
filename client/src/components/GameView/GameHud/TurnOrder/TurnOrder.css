@@ -1,1 +1,12 @@
-/* Turn-order styles remain in the parent GameHud.css. */
+.turn-order {
+	display: grid;
+	max-height: calc(23 * var(--u));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(19 * var(--u))), 1fr));
+	align-content: start;
+	gap: calc(.45 * var(--u)) calc(.7 * var(--u));
+	overflow: hidden;
+}
+
+.turn-order > .hud-kicker {
+	grid-column: 1 / -1;
+}

@@ -1,1 +1,43 @@
-/* Per-player voice styles remain in PlayerInteractionCard.css. */
+.player-voice-controls {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: .35rem .75rem;
+	border: var(--hair) solid #52796f77;
+	border-radius: var(--radius-sm);
+	padding: var(--space-2);
+	background: #18201eaa;
+}
+
+.player-voice-controls label {
+	display: flex;
+	grid-column: 1 / -1;
+	justify-content: space-between;
+	gap: 1rem;
+	color: var(--color-white);
+	font-size: var(--t-xs);
+	font-weight: 800;
+}
+
+.player-voice-controls output {
+	color: var(--color-ready);
+	font-variant-numeric: tabular-nums;
+}
+
+.player-voice-controls input[type="range"] {
+	width: 100%;
+	min-width: 0;
+	min-height: 1.6rem;
+	border: 0;
+	padding: 0;
+	accent-color: var(--color-teal);
+	cursor: pointer;
+}
+
+.player-voice-controls .audio-mute {
+	min-width: 8.5rem;
+}
+
+.player-voice-controls.is-muted input[type="range"] {
+	opacity: .45;
+}

@@ -101,6 +101,33 @@ function SlideStagePreview() {
   </div>;
 }
 
+function VoiceStatusPreview() {
+  const [selfMuted, setSelfMuted] = useState(false);
+  const gameVoice = makeVoice({ selfMuted, toggleSelfMuted: () => setSelfMuted((current) => !current) });
+  return <>
+    <State label="verbunden (Lobby)"><VoiceStatus voice={makeVoice()} variant="lobby" /></State>
+    <State label="nur hören (Lobby)"><VoiceStatus voice={makeVoice({ status: "listen-only", canSelfMute: false, notice: "Mikrofon nicht freigegeben" })} variant="lobby" /></State>
+    <State label="Mikro an/aus (Game, klickbar)"><VoiceStatus voice={gameVoice} variant="game" /></State>
+    <State label="verbindet (Game)"><VoiceStatus voice={makeVoice({ status: "requesting", canSelfMute: false })} variant="game" /></State>
+    <State label="nicht verbunden (Game)"><VoiceStatus voice={makeVoice({ status: "idle", canSelfMute: false })} variant="game" /></State>
+    <State label="nur hören (Game)"><VoiceStatus voice={makeVoice({ status: "listen-only", canSelfMute: false, notice: "Mikrofon nicht freigegeben" })} variant="game" /></State>
+    <State label="nicht unterstützt (Game)"><VoiceStatus voice={makeVoice({ status: "unsupported", canSelfMute: false })} variant="game" /></State>
+  </>;
+}
+
+function PhaseHudPreview() {
+  return <>
+    {Array.from({ length: 7 }, (_, index) => {
+      const phase = index + 1;
+      return <State label={`Phase ${phase}`} key={phase}>
+        <div style={{ position: "relative", width: "min(100%, 30rem)", minHeight: "6rem" }}>
+          <PhaseHud round={phase} phase={phase} phaseLaid={phase === 3} />
+        </div>
+      </State>;
+    })}
+  </>;
+}
+
 export const previews: Preview[] = [
   // ---- Geteilte Bausteine ----
   { id: "Brand", title: "Brand", group: "Geteilt", render: () => <><State label="full"><Brand /></State><State label="compact"><Brand variant="compact" /></State></> },
@@ -110,7 +137,7 @@ export const previews: Preview[] = [
   { id: "GameStatusBar", title: "GameStatusBar", group: "Geteilt", render: () => <><State label="verbunden"><GameStatusBar connected /></State><State label="unterbrochen"><GameStatusBar connected={false} /></State></> },
   { id: "PlayerStatLabels", title: "PlayerStatLabels", group: "Geteilt", render: () => <><State label="ohne Strafe"><PlayerStatLabels coins={5} cards={7} /></State><State label="mit Strafe"><PlayerStatLabels coins={2} cards={11} penalty={40} /></State></> },
   { id: "EmptyState", title: "EmptyState", group: "Geteilt", render: () => <><State label="leer"><EmptyState title="Noch keine Lobby offen." hint="Erstelle die erste Runde." /></State><State label="Ladezustand"><EmptyState className="lobby-loading" role="status" title="Lobbys werden gemischt …" hint="Einen Moment bitte." /></State></> },
-  { id: "VoiceStatus", title: "VoiceStatus", group: "Geteilt", render: () => <><State label="verbunden (Lobby)"><VoiceStatus voice={makeVoice()} variant="lobby" /></State><State label="stumm (Lobby)"><VoiceStatus voice={makeVoice({ selfMuted: true })} variant="lobby" /></State><State label="nur hören"><VoiceStatus voice={makeVoice({ status: "listen-only", canSelfMute: false, notice: "Mikrofon nicht freigegeben" })} variant="lobby" /></State></> },
+  { id: "VoiceStatus", title: "VoiceStatus", group: "Geteilt", render: () => <VoiceStatusPreview /> },
   { id: "AppHeader", title: "AppHeader", group: "Geteilt", render: () => <AppHeader user={user} leftLabel="Abmelden" leftAudio="close" onLeft={noop} onProfile={noop} profileAudio="open" /> },
   { id: "Badge", title: "Badge", group: "Geteilt", render: () => <><State label="Zähler"><Badge>4 Spieler</Badge></State><State label="Meta"><Badge>AB12</Badge></State></> },
   { id: "Orientation", title: "Orientation", group: "Geteilt", render: () => <div className="dev-orientation-preview"><Orientation landscape /></div> },
@@ -144,7 +171,7 @@ export const previews: Preview[] = [
   { id: "LobbyView", title: "LobbyView (Screen)", group: "Lobby", full: true, render: () => <LobbyView user={gameUser} lobby={lobby} connected voice={makeVoice()} error="" setError={noop} onLeave={async () => true} onProfile={noop} /> },
 
   // ---- Gametable ----
-  { id: "PhaseHud", title: "PhaseHud", group: "Gametable", render: () => <div className="game-hud"><PhaseHud round={3} phase={3} phaseLaid /><PhaseHud round={1} phase={1} phaseLaid={false} /></div> },
+  { id: "PhaseHud", title: "PhaseHud · alle Phasen", group: "Gametable", render: () => <PhaseHudPreview /> },
   { id: "TurnOrderPlayer", title: "TurnOrderPlayer", group: "Gametable", render: () => <div className="game-hud"><TurnOrderPlayer player={waitingSeats[0]} index={0} cards={waitingSeats[0].handCount} seatRef={noop} onProfile={noop} /></div> },
   { id: "TurnOrder", title: "TurnOrder", group: "Gametable", render: () => <div className="game-hud"><TurnOrder players={waitingSeats} seatRef={() => noop} shownCards={(player) => player.handCount} onProfile={noop} /></div> },
   { id: "ActivePlayerHud", title: "ActivePlayerHud", group: "Gametable", render: () => <div className="game-hud"><ActivePlayerHud player={activeSeat} isSelf cards={activeSeat.handCount} seatRef={noop} onProfile={noop} opensAt={null} deadlineAt={new Date(Date.now() + 42_000).toISOString()} finished={false} /></div> },
@@ -152,7 +179,7 @@ export const previews: Preview[] = [
   { id: "TurnCountdown", title: "TurnCountdown", group: "Gametable", render: () => <><State label="läuft"><TurnCountdown opensAt={null} deadlineAt={new Date(Date.now() + 42_000).toISOString()} finished={false} /></State><State label="dringend"><TurnCountdown opensAt={null} deadlineAt={new Date(Date.now() + 6_000).toISOString()} finished={false} /></State><State label="unbegrenzt"><TurnCountdown opensAt={null} deadlineAt={null} finished={false} /></State></> },
   { id: "GameBoard", title: "GameBoard", group: "Gametable", render: () => <GameBoard zoneClass={() => ""} anchor={() => noop} runZone={noop} canDraw canDiscard canLay shownDraw={54} shownDiscard={{ top: demoCards[0], count: 6 }} discardTop={demoCards[0]} melds={[demoMeld]} openMelds={[demoMeld.id]} arrivals={{}} /> },
   { id: "PlayerHand", title: "PlayerHand", group: "Gametable", render: () => <PlayerHand handRef={noop} cards={demoCards} selected={[demoCards[2].id]} dragCardId={null} arrivals={{}} startDrag={() => noop} toggleCard={noop} /> },
-  { id: "BuyButton", title: "BuyButton", group: "Gametable", render: () => <div style={{ position: "relative", height: 80 }}><BuyButton visible position={{ left: 0, top: 20, width: 220 }} canBuy busy={false} onPointerUp={noop} onClick={noop} /></div> },
+  { id: "BuyButton", title: "BuyButton", group: "Gametable", render: () => <><State label="verfügbar"><div style={{ position: "relative", height: 110 }}><BuyButton visible position={{ left: 0, top: 20, width: 84, height: 56 }} canBuy busy={false} onPointerUp={noop} onClick={noop} /></div></State><State label="deaktiviert"><div style={{ position: "relative", height: 110 }}><BuyButton visible position={{ left: 0, top: 20, width: 84, height: 56 }} canBuy={false} busy={false} onPointerUp={noop} onClick={noop} /></div></State></> },
   { id: "GameEvents", title: "GameEvents", group: "Gametable", render: () => <GameEvents events={[{ key: "e1", text: "Milan zieht eine Karte" }, { key: "e2", text: "Du legst ab" }]} /> },
   { id: "SortControl", title: "SortControl", group: "Gametable", render: () => <div className="menu-sort"><SortControl sort="rank" onSort={noop} /></div> },
   { id: "GameMenu", title: "GameMenu", group: "Gametable", render: () => <GameMenu sort="rank" onSort={noop} onScoreboard={noop} onProfile={noop} onTutorial={noop} onLeave={noop} onClose={noop} /> },

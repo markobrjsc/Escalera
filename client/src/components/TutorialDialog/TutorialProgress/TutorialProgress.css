@@ -1,1 +1,38 @@
-/* Progress styles remain in the parent TutorialDialog.css. */
+.tutorial-progress {
+	display: grid;
+	gap: .4rem;
+}
+
+.tutorial-progress-label {
+	justify-content: space-between;
+	color: var(--color-muted);
+	font-size: .72rem;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+}
+
+.tutorial-progress-label strong {
+	color: var(--color-teal);
+}
+
+.tutorial-progress-track {
+	display: grid;
+	grid-template-columns: repeat(16, minmax(.35rem, 1fr));
+	gap: .25rem;
+}
+
+.tutorial-progress-track span {
+	height: .28rem;
+	border: 1px solid color-mix(in srgb, var(--color-teal) 38%, transparent);
+	background: transparent;
+}
+
+.tutorial-progress-track span.is-read {
+	background: color-mix(in srgb, var(--color-teal) 62%, transparent);
+}
+
+.tutorial-progress-track span.is-current {
+	border-color: var(--color-white);
+	background: var(--color-teal);
+	box-shadow: 0 0 .55rem color-mix(in srgb, var(--color-teal) 54%, transparent);
+}

@@ -1,1 +1,46 @@
-/* Brand styles remain in design-system.css and AppHeader.css. */
+.brand {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--font-xl);
+	font-weight: 900;
+	letter-spacing: .03em;
+	line-height: .9;
+	text-transform: uppercase;
+}
+
+.brand-suits {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: clamp(.35rem, 2vw, .8rem);
+	white-space: nowrap;
+}
+
+.brand-suit {
+	font-size: clamp(1.5rem, 7vmin, 2.5rem);
+	line-height: 1;
+}
+
+.suit-red {
+	color: var(--color-danger);
+}
+
+.login-card .brand-suits {
+	min-width: 0;
+}
+
+.app-header .brand {
+	align-self: center;
+}
+
+.brand-small {
+	font-size: clamp(1.55rem, 7vw, 2.6rem);
+}
+
+.app-header .brand-suits {
+	gap: var(--space-1);
+}
+
+.app-header .brand-suit {
+	font-size: clamp(1.15rem, 5vmin, 2rem);
+}

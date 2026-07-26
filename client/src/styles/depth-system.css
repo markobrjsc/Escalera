@@ -1,0 +1,853 @@
+/*
+ * Escalera depth system (#93)
+ *
+ * Progressive DOM enhancement: the semantic interface stays fully usable
+ * without WebGL or JavaScript. Pointer tilt only writes the custom properties
+ * below and never owns layout, focus, or interaction state.
+ */
+
+:root {
+	--depth-perspective: 72rem;
+	--depth-axis-x: 0;
+	--depth-axis-y: 1;
+	--depth-angle: 0deg;
+	--depth-pop: 0px;
+	--depth-lift: 0px;
+	--depth-edge-light: #ffffff24;
+	--depth-edge-dark: #000c;
+	--depth-teal-glow: #52796f4d;
+	--depth-ready-glow: #8cd6b338;
+	--depth-shadow-low: 0 .18rem .3rem #0008, 0 .55rem 1.15rem #0005;
+	--depth-shadow-medium: 0 .18rem .25rem #000b, 0 .9rem 2rem #0008;
+	--depth-shadow-high: 0 .2rem .25rem #000d, 0 1.45rem 3.5rem #000b;
+	--depth-inset: inset 0 1px 0 var(--depth-edge-light), inset 0 -2px 0 #0008;
+	--depth-motion: 220ms cubic-bezier(.2, .75, .25, 1);
+}
+
+html {
+	background: var(--color-onyx);
+}
+
+body {
+	background-image:
+		radial-gradient(circle at 18% -8%, #52796f2b, transparent 38rem),
+		radial-gradient(circle at 92% 108%, #20312d52, transparent 34rem),
+		linear-gradient(155deg, #101815 0%, #0d0d0d 46%, #080a09 100%);
+	background-attachment: fixed;
+}
+
+#root,
+.orientation-notice,
+.tree-overlay,
+.game-result-overlay,
+.dev-shell {
+	perspective: var(--depth-perspective);
+	transform-style: preserve-3d;
+}
+
+.portrait-view,
+.landscape-view,
+.orientation-notice,
+.tree-overlay {
+	background-image:
+		radial-gradient(circle at 50% -14%, #52796f20, transparent 42%),
+		linear-gradient(145deg, #11171444, transparent 46%);
+}
+
+.game-view {
+	background-color: #0d0d0dc7;
+	background-image:
+		radial-gradient(ellipse at 50% 43%, #203d343b 0%, transparent 58%),
+		linear-gradient(180deg, #101613e8 0%, #0d0d0dc9 34%, #080a09e8 100%);
+	backdrop-filter: blur(2px);
+}
+
+/* App chrome and large material surfaces */
+
+.app-header {
+	border-bottom-color: #ffffff26;
+	background-image:
+		linear-gradient(105deg, #ffffff0c, transparent 28% 72%, #52796f16),
+		linear-gradient(180deg, #18211ef5, #0b0e0df2);
+	box-shadow:
+		inset 0 -1px 0 #000,
+		0 .24rem .35rem #000a,
+		0 .75rem 1.6rem #0005;
+	backdrop-filter: blur(16px) saturate(1.15);
+}
+
+.surface,
+.game-menu,
+.player-interaction-card,
+.result-panel,
+.pile-design-panel,
+.dev-canvas,
+.dev-tile {
+	border-color: #ffffffb8;
+	background-color: #0d0f0ef2;
+	background-image:
+		linear-gradient(118deg, #ffffff0e 0%, transparent 25% 70%, #52796f13 100%),
+		linear-gradient(155deg, #17221ef2 0%, #0d0f0ef5 56%, #080908fa 100%);
+	box-shadow: var(--depth-inset), var(--depth-shadow-medium);
+}
+
+.login-card,
+.lobby-browser,
+.members-panel,
+.dialog,
+.game-menu,
+.player-interaction-card,
+.result-panel,
+.pile-design-panel {
+	transform-style: preserve-3d;
+	backface-visibility: hidden;
+}
+
+.login-card {
+	box-shadow:
+		inset 0 1px 0 #ffffff38,
+		inset 0 -3px 0 #000b,
+		0 .2rem .25rem #000c,
+		0 1.4rem 3.4rem #000c,
+		0 0 3rem #52796f26;
+}
+
+.lobby-browser,
+.members-panel {
+	box-shadow:
+		inset 0 1px 0 #ffffff25,
+		inset 0 -2px 0 #0009,
+		0 .2rem .25rem #000b,
+		0 .9rem 2rem #0008;
+}
+
+.dialog-backdrop,
+.game-result-overlay,
+.player-card-backdrop {
+	background:
+		radial-gradient(circle at 50% 34%, #29483d42, transparent 44%),
+		#080a09e8;
+	backdrop-filter: blur(12px) saturate(.82);
+}
+
+.dialog,
+.result-panel,
+.player-interaction-card {
+	box-shadow:
+		inset 0 1px 0 #ffffff38,
+		inset 0 -3px 0 #000d,
+		0 .28rem .3rem #000e,
+		0 1.6rem 4rem #000d,
+		0 0 0 1px #52796f4d,
+		0 0 3.5rem #52796f24;
+}
+
+.dialog-title,
+.tree-overlay-bar,
+.score-history-heading,
+.profile-audio-title,
+.dev-canvas-head {
+	text-shadow: 0 2px 4px #000c;
+}
+
+.dialog-divider,
+.lobby-divider {
+	border-top-color: #ffffff30;
+	box-shadow: 0 1px 0 #000c, 0 -1px 0 #52796f24;
+}
+
+/* Reusable cards, rows and compact surfaces */
+
+.lobby-card,
+.member-card,
+.member-slot-empty,
+.turn-order-player,
+.active-player-hud,
+.result-row,
+.stat-grid span,
+.profile-audio,
+.player-voice-controls,
+.achievement-toast,
+.tree-tile,
+.empty-state,
+.toggle,
+.score-history-scroll,
+.audio-level {
+	background-color: #101513e8;
+	background-image:
+		linear-gradient(115deg, #ffffff0d 0%, transparent 30% 72%, #52796f12 100%),
+		linear-gradient(160deg, #18221ef0, #0b0e0df2 68%);
+	box-shadow: var(--depth-inset), var(--depth-shadow-low);
+}
+
+.lobby-card,
+.member-card,
+.turn-order-player,
+.active-player-hud,
+.result-row,
+.achievement-toast,
+.tree-tile,
+.meld-card,
+.dev-tile {
+	transform-style: preserve-3d;
+	backface-visibility: hidden;
+}
+
+.lobby-card {
+	border-color: #ffffff94;
+}
+
+.lobby-card:hover,
+.lobby-card:focus-within {
+	border-color: var(--color-teal);
+	box-shadow:
+		inset 0 1px 0 #ffffff30,
+		inset 0 -2px 0 #000a,
+		0 .25rem .32rem #000b,
+		0 1rem 2.1rem #0009,
+		0 0 1.4rem var(--depth-teal-glow);
+}
+
+.member-card.is-ready,
+.active-player-hud.is-self {
+	box-shadow:
+		inset 0 1px 0 #ffffff30,
+		inset 0 -2px 0 #0009,
+		0 .2rem .28rem #000a,
+		0 .75rem 1.55rem #0008,
+		0 0 1.2rem var(--depth-ready-glow);
+}
+
+.member-card.is-offline,
+.turn-order-player.is-offline {
+	box-shadow: inset 0 1px 0 #ffffff12, 0 .25rem .65rem #0006;
+}
+
+.member-slot-empty,
+.empty-state {
+	background-image:
+		repeating-linear-gradient(135deg, #ffffff02 0 .5rem, transparent .5rem 1rem),
+		linear-gradient(160deg, #151b18cc, #0a0d0bd9);
+	box-shadow: inset 0 .25rem .8rem #0008, 0 .3rem .75rem #0005;
+}
+
+.result-row {
+	border-color: #52796fa8;
+}
+
+.result-row:hover,
+.score-history tbody tr:hover > * {
+	background-color: #20312db8;
+}
+
+.placement-1 {
+	box-shadow:
+		inset 0 1px 0 #ffffff42,
+		inset 0 -2px 0 #000a,
+		0 .25rem .3rem #000b,
+		0 .9rem 2rem #0009,
+		0 0 1.6rem #d8b66a30;
+}
+
+.badge,
+.lobby-pill,
+.member-state,
+.player-stat,
+.connection,
+.turn-countdown,
+.voice-status,
+.game-status-bar,
+.game-event {
+	box-shadow:
+		inset 0 1px 0 #ffffff1f,
+		inset 0 -1px 0 #000a,
+		0 .16rem .32rem #0007;
+	text-shadow: 0 1px 2px #000c;
+}
+
+.badge,
+.lobby-pill,
+.member-state,
+.player-stat {
+	background-image: linear-gradient(155deg, #ffffff0c, #0003);
+}
+
+.profile-icon {
+	background-image:
+		radial-gradient(circle at 32% 25%, #ffffff2e, transparent 26%),
+		linear-gradient(145deg, #52796f, #20312d 64%, #111714);
+	box-shadow:
+		inset .1rem .1rem .18rem #ffffff28,
+		inset -.14rem -.18rem .25rem #000a,
+		0 .18rem .28rem #000c,
+		0 .55rem 1.05rem #0007;
+}
+
+.profile-icon img {
+	filter: saturate(1.04) contrast(1.03);
+}
+
+/* Forms keep their native semantics while reading as recessed controls. */
+
+input:not([type="checkbox"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+	border-color: #ffffff9e;
+	background-color: #090b0a;
+	background-image:
+		linear-gradient(180deg, #0008, transparent 42%),
+		linear-gradient(120deg, #101714, #080a09);
+	box-shadow:
+		inset 0 .28rem .55rem #000b,
+		inset 0 -1px 0 #ffffff0e,
+		0 1px 0 #ffffff12;
+	transition:
+		border-color var(--depth-motion),
+		box-shadow var(--depth-motion),
+		background-color var(--depth-motion);
+}
+
+input:not([type="checkbox"]):not([type="range"]):not([type="file"]):hover,
+select:hover,
+textarea:hover {
+	border-color: #ffffffd1;
+}
+
+input:not([type="checkbox"]):not([type="range"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+	border-color: var(--color-ready);
+	box-shadow:
+		inset 0 .22rem .45rem #000c,
+		0 0 0 2px #8cd6b347,
+		0 .35rem .85rem #0008;
+}
+
+.toggle,
+.audio-level,
+.registration-warning {
+	border-color: #52796fa8;
+	background-color: #111916d9;
+}
+
+input[type="checkbox"] {
+	filter: drop-shadow(0 2px 2px #000a);
+}
+
+input[type="range"] {
+	filter: drop-shadow(0 2px 2px #000a);
+}
+
+/* Bevel and travel are additive; card and pile transforms remain untouched. */
+
+button:where(:not(.playing-card):not(.game-pile)),
+:where(.button) {
+	background-image:
+		linear-gradient(180deg, #ffffff10, transparent 43%, #0003),
+		linear-gradient(115deg, transparent 0 72%, #52796f12);
+	box-shadow:
+		inset 0 1px 0 #ffffff2b,
+		inset 0 -2px 0 #0009,
+		0 .16rem .2rem #000a,
+		0 .42rem .82rem #0005;
+	text-shadow: 0 1px 2px #0008;
+	transition:
+		transform var(--depth-motion),
+		background-color var(--depth-motion),
+		color var(--depth-motion),
+		border-color var(--depth-motion),
+		box-shadow var(--depth-motion),
+		filter var(--depth-motion);
+}
+
+.button-primary {
+	background-image:
+		linear-gradient(180deg, #fff, #e7e9e7 66%, #bdc4c0),
+		none;
+	box-shadow:
+		inset 0 1px 0 #fff,
+		inset 0 -2px 0 #7d8581,
+		0 .18rem .22rem #000c,
+		0 .5rem 1rem #0007;
+	text-shadow: 0 1px 0 #fff8;
+}
+
+.button-danger {
+	background-image:
+		linear-gradient(180deg, #ff7a7a1d, transparent 52%, #0003),
+		linear-gradient(115deg, transparent, #ff7a7a12);
+}
+
+.button-icon,
+.avatar-button,
+.profile-button,
+.logout-button,
+.game-nav-button,
+.audio-mute {
+	box-shadow:
+		inset 0 1px 0 #ffffff2b,
+		inset 0 -2px 0 #000a,
+		0 .18rem .22rem #000b,
+		0 .45rem .9rem #0006;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	button:where(:not(.playing-card):not(.game-pile):not(.buy-button):not(:disabled)):hover,
+	:where(.button:not(:disabled):hover) {
+		box-shadow:
+			inset 0 1px 0 #ffffff38,
+			inset 0 -2px 0 #0009,
+			0 .22rem .25rem #000b,
+			0 .7rem 1.25rem #0008,
+			0 0 .9rem #52796f36;
+	}
+
+	button:where(:not(.playing-card):not(.game-pile):not(.buy-button):not(:disabled)):active,
+	:where(.button:not(:disabled):active) {
+		box-shadow:
+			inset 0 .2rem .35rem #0009,
+			inset 0 -1px 0 #ffffff18,
+			0 .12rem .2rem #0009;
+	}
+}
+
+button:focus-visible,
+.button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline-color: var(--color-ready);
+	filter: drop-shadow(0 0 .48rem #8cd6b370);
+}
+
+button:disabled,
+.button:disabled {
+	translate: none;
+	filter: saturate(.55);
+	box-shadow: inset 0 1px 0 #ffffff12, 0 .12rem .25rem #0005;
+}
+
+/* Game table and physical card layers */
+
+.game-board {
+	border: max(1px, calc(.1 * var(--u))) solid #ffffff16;
+	border-radius: calc(1.4 * var(--u));
+	background-image:
+		radial-gradient(ellipse at 50% 42%, #52796f18, transparent 55%),
+		repeating-linear-gradient(92deg, #ffffff01 0 1px, transparent 1px calc(5 * var(--u))),
+		linear-gradient(155deg, #13201bb8, #090c0ae8 66%);
+	box-shadow:
+		inset 0 1px 0 #ffffff16,
+		inset 0 calc(-1.2 * var(--u)) calc(2.6 * var(--u)) #0008,
+		0 calc(1.1 * var(--u)) calc(1.2 * var(--u)) #000b,
+		0 calc(3.2 * var(--u)) calc(5.5 * var(--u)) #0009;
+}
+
+.pile-slot {
+	background-image:
+		linear-gradient(145deg, #ffffff08, transparent 36%),
+		radial-gradient(ellipse at 50% 58%, #52796f18, #0003);
+	box-shadow:
+		inset 0 .35rem .8rem #0008,
+		inset 0 1px 0 #ffffff13,
+		0 .35rem .8rem #0005;
+}
+
+.pile-stack {
+	filter: drop-shadow(0 calc(.45 * var(--u)) calc(.55 * var(--u)) #000a);
+	transform-style: preserve-3d;
+}
+
+.game-pile:not(:disabled):hover .pile-stack,
+.game-pile:focus-visible .pile-stack {
+	filter:
+		drop-shadow(0 calc(.7 * var(--u)) calc(.7 * var(--u)) #000c)
+		drop-shadow(0 0 calc(.45 * var(--u)) #8cd6b35c);
+}
+
+.card-3d {
+	position: relative;
+	transform: translateZ(0);
+	transform-style: preserve-3d;
+	transition:
+		transform 180ms cubic-bezier(.2, .75, .25, 1),
+		filter 180ms ease;
+}
+
+.card-3d::after {
+	position: absolute;
+	inset: 0;
+	border: 1px solid #ffffff66;
+	border-radius: 4%;
+	background: linear-gradient(112deg, #ffffff2e, transparent 24% 74%, #0002);
+	content: "";
+	pointer-events: none;
+	mix-blend-mode: soft-light;
+}
+
+.playing-card:hover .card-3d,
+.playing-card:focus-visible .card-3d,
+.playing-card.is-selected .card-3d {
+	transform: translateZ(calc(1.2 * var(--u))) rotateX(-1.5deg);
+	filter: drop-shadow(0 calc(.8 * var(--u)) calc(.65 * var(--u)) #000c);
+}
+
+.meld-card {
+	background-image:
+		linear-gradient(140deg, #ffffff08, transparent 35%),
+		linear-gradient(180deg, #17211d82, #080a09a8);
+	box-shadow:
+		inset 0 1px 0 #ffffff15,
+		0 calc(.3 * var(--u)) calc(.7 * var(--u)) #0007;
+}
+
+.meld-cards .card-face,
+.drag-ghost .card-face,
+.fx-face {
+	filter:
+		drop-shadow(0 calc(.22 * var(--u, 8px)) calc(.2 * var(--u, 8px)) #0009)
+		saturate(1.03);
+}
+
+.phase-hud,
+.active-player-hud,
+.turn-order-player,
+.game-status-bar,
+.game-nav-button,
+.game-event {
+	border-color: #ffffff3d;
+	background-image:
+		linear-gradient(115deg, #ffffff10, transparent 35% 72%, #52796f12),
+		linear-gradient(155deg, #202b27e8, #0b0e0ded 68%);
+	box-shadow:
+		inset 0 1px 0 #ffffff26,
+		inset 0 -2px 0 #0009,
+		0 calc(.25 * var(--u, 8px)) calc(.35 * var(--u, 8px)) #000b,
+		0 calc(.7 * var(--u, 8px)) calc(1.5 * var(--u, 8px)) #0007;
+	backdrop-filter: blur(10px);
+}
+
+.phase-hud {
+	border-color: #ffffff38;
+}
+
+.game-menu {
+	border-width: 0 2px 0 0;
+	border-color: #ffffff40;
+	box-shadow:
+		inset -1px 0 0 #000b,
+		inset 1px 0 0 #ffffff1c,
+		.5rem 0 1rem #000a,
+		1.5rem 0 4rem #000b;
+	backdrop-filter: blur(18px) saturate(1.12);
+}
+
+.sort-control,
+.menu-sort {
+	background-image: linear-gradient(145deg, #ffffff08, #0004);
+	box-shadow: inset 0 .22rem .55rem #0008, 0 1px 0 #ffffff12;
+}
+
+/* Achievement tree, feedback and transient layers */
+
+.tree-overlay-bar,
+.tree-hint {
+	background-image: linear-gradient(180deg, #17211df2, #0b0e0df2);
+	box-shadow: 0 .45rem 1.1rem #0009;
+}
+
+.panzoom {
+	box-shadow:
+		inset 0 1.2rem 2.5rem #000b,
+		inset 0 -1.2rem 2.5rem #000b;
+}
+
+.tree-tile {
+	box-shadow:
+		inset 0 1px 0 #ffffff26,
+		inset 0 -3px 0 #000b,
+		0 .24rem .28rem #000d,
+		0 .7rem 1.2rem #0009;
+}
+
+.tree-tile.is-unlocked {
+	box-shadow:
+		inset 0 1px 0 #ffffff35,
+		inset 0 -3px 0 #000b,
+		0 .24rem .28rem #000d,
+		0 .8rem 1.35rem #0009,
+		0 0 1.2rem var(--depth-ready-glow);
+}
+
+.tree-tooltip {
+	border-color: #ffffff69;
+	background-image:
+		linear-gradient(125deg, #ffffff12, transparent 36%),
+		linear-gradient(160deg, #17211dfa, #080a09fc);
+	box-shadow: var(--depth-inset), var(--depth-shadow-high);
+}
+
+.achievement-toast,
+.game-error {
+	backdrop-filter: blur(12px);
+	box-shadow:
+		inset 0 1px 0 #ffffff2b,
+		inset 0 -2px 0 #000a,
+		0 .24rem .3rem #000c,
+		0 1rem 2.2rem #000a;
+}
+
+.match-intro-fan,
+.deal-stage,
+.fx-layer {
+	transform-style: preserve-3d;
+}
+
+.match-intro-fan img {
+	box-shadow:
+		0 .15rem .18rem #000d,
+		0 .8rem 1.8rem #000c,
+		0 0 1rem #8cd6b328;
+}
+
+/* Event-delegated pointer tilt. The hook only activates this class on fine
+   pointers; nested controls remain ordinary DOM and retain their hit targets. */
+
+:is(
+	.login-card,
+	.lobby-browser,
+	.lobby-card,
+	.members-panel,
+	.member-card,
+	.dialog,
+	.game-menu,
+	.player-interaction-card,
+	.result-panel,
+	.turn-order-player,
+	.active-player-hud,
+	.meld-card,
+	.tree-tile,
+	.achievement-toast,
+	.pile-design-panel,
+	.dev-tile,
+	.dev-canvas
+).is-depth-active {
+	--depth-pop: .55rem;
+	--depth-lift: -.12rem;
+	will-change: translate, rotate;
+	translate: 0 var(--depth-lift) var(--depth-pop);
+	rotate: var(--depth-axis-x) var(--depth-axis-y) 0 var(--depth-angle);
+	transition:
+		translate 90ms linear,
+		rotate 90ms linear,
+		border-color var(--depth-motion),
+		box-shadow var(--depth-motion);
+}
+
+:is(
+	.dialog,
+	.game-menu,
+	.player-interaction-card,
+	.result-panel,
+	.pile-design-panel,
+	.dev-canvas
+).is-depth-active {
+	--depth-pop: .8rem;
+}
+
+@media (max-width: 720px), (max-height: 520px) {
+	:root {
+		--depth-perspective: 58rem;
+		--depth-shadow-medium: 0 .15rem .2rem #000a, 0 .55rem 1.25rem #0008;
+		--depth-shadow-high: 0 .18rem .22rem #000c, 0 .8rem 2rem #000a;
+	}
+
+	body {
+		background-attachment: scroll;
+	}
+
+	.app-header,
+	.dialog,
+	.game-menu,
+	.game-view,
+	.phase-hud,
+	.active-player-hud,
+	.turn-order-player,
+	.game-status-bar,
+	.game-nav-button,
+	.game-event {
+		backdrop-filter: none;
+	}
+
+	.surface,
+	.game-menu,
+	.player-interaction-card,
+	.result-panel,
+	.pile-design-panel {
+		box-shadow: var(--depth-inset), var(--depth-shadow-medium);
+	}
+
+	:is(
+		.login-card,
+		.lobby-browser,
+		.lobby-card,
+		.members-panel,
+		.member-card,
+		.dialog,
+		.game-menu,
+		.player-interaction-card,
+		.result-panel,
+		.turn-order-player,
+		.active-player-hud,
+		.meld-card,
+		.tree-tile,
+		.achievement-toast,
+		.pile-design-panel,
+		.dev-tile,
+		.dev-canvas
+	).is-depth-active {
+		--depth-pop: .28rem;
+		--depth-lift: -.06rem;
+		rotate: var(--depth-axis-x) var(--depth-axis-y) 0 calc(var(--depth-angle) * .62);
+		will-change: auto;
+	}
+
+	.dialog-backdrop,
+	.game-result-overlay,
+	.player-card-backdrop {
+		backdrop-filter: blur(7px) saturate(.88);
+	}
+}
+
+:where(
+	.portrait-view,
+	.landscape-view,
+	.dialog,
+	.lobby-scroll,
+	.game-menu,
+	.score-history-scroll,
+	.tutorial-content
+) {
+	scrollbar-color: #52796f #0b100e;
+	scrollbar-width: thin;
+}
+
+:where(
+	.portrait-view,
+	.landscape-view,
+	.dialog,
+	.lobby-scroll,
+	.game-menu,
+	.score-history-scroll,
+	.tutorial-content
+)::-webkit-scrollbar {
+	width: .48rem;
+	height: .48rem;
+}
+
+:where(
+	.portrait-view,
+	.landscape-view,
+	.dialog,
+	.lobby-scroll,
+	.game-menu,
+	.score-history-scroll,
+	.tutorial-content
+)::-webkit-scrollbar-track {
+	background: #0b100e;
+	box-shadow: inset 1px 0 #ffffff0d;
+}
+
+:where(
+	.portrait-view,
+	.landscape-view,
+	.dialog,
+	.lobby-scroll,
+	.game-menu,
+	.score-history-scroll,
+	.tutorial-content
+)::-webkit-scrollbar-thumb {
+	border: 2px solid #0b100e;
+	border-radius: 999px;
+	background: linear-gradient(180deg, #78ad9f, #35594f);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root:not(.motion-full) {
+		--depth-motion: 1ms linear;
+	}
+
+	html:not(.motion-full) :is(
+		.login-card,
+		.lobby-browser,
+		.lobby-card,
+		.members-panel,
+		.member-card,
+		.dialog,
+		.game-menu,
+		.player-interaction-card,
+		.result-panel,
+		.turn-order-player,
+		.active-player-hud,
+		.meld-card,
+		.tree-tile,
+		.achievement-toast,
+		.pile-design-panel,
+		.dev-tile,
+		.dev-canvas
+	).is-depth-active {
+		translate: none;
+		rotate: none;
+		transition-duration: 1ms;
+	}
+
+	html:not(.motion-full) .playing-card:hover .card-3d,
+	html:not(.motion-full) .playing-card:focus-visible .card-3d,
+	html:not(.motion-full) .playing-card.is-selected .card-3d {
+		transform: none;
+		transition-duration: 1ms;
+	}
+
+	html:not(.motion-full) button:not(.playing-card):not(.game-pile),
+	html:not(.motion-full) .button {
+		translate: none !important;
+		transition-duration: 1ms;
+	}
+}
+
+.motion-reduced :is(
+	.login-card,
+	.lobby-browser,
+	.lobby-card,
+	.members-panel,
+	.member-card,
+	.dialog,
+	.game-menu,
+	.player-interaction-card,
+	.result-panel,
+	.turn-order-player,
+	.active-player-hud,
+	.meld-card,
+	.tree-tile,
+	.achievement-toast,
+	.pile-design-panel,
+	.dev-tile,
+	.dev-canvas
+).is-depth-active {
+	translate: none;
+	rotate: none;
+	transition-duration: 1ms;
+}
+
+.motion-reduced .playing-card:hover .card-3d,
+.motion-reduced .playing-card:focus-visible .card-3d,
+.motion-reduced .playing-card.is-selected .card-3d {
+	transform: none;
+	transition-duration: 1ms;
+}
+
+.motion-reduced button:not(.playing-card):not(.game-pile),
+.motion-reduced .button {
+	translate: none !important;
+	transition-duration: 1ms;
+}

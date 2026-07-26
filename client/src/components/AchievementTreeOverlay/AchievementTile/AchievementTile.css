@@ -1,1 +1,72 @@
-/* Tile styles remain in AchievementTreeOverlay.css to preserve cascade order. */
+.tree-tile {
+	position: absolute;
+	display: grid;
+	place-items: center;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+	border: 3px solid #6b5836;
+	border-radius: 6px;
+	background: #241a10;
+	color: var(--color-white);
+	box-shadow: inset 0 0 0 2px #0006, 0 2px 4px #0008;
+}
+
+.tree-tile.is-root {
+	border-color: var(--color-teal);
+	border-style: dashed;
+	background: #101614;
+	color: var(--color-teal);
+	font-size: 1.6rem;
+}
+
+.tree-tile.is-locked {
+	border-color: #4a4033;
+	background: #1a1610;
+	color: var(--color-muted);
+	opacity: .8;
+}
+
+.tree-tile.is-unlocked {
+	border-color: var(--color-ready);
+	background: #16241d;
+	box-shadow: inset 0 0 0 2px #0006, 0 0 10px #8cd6b355;
+}
+
+.tree-tile:focus-visible {
+	outline: 3px solid var(--color-teal);
+	outline-offset: 2px;
+}
+
+.tree-tile-glyph {
+	font-size: 1.5rem;
+	line-height: 1;
+}
+
+.tree-tile.is-unlocked .tree-tile-glyph {
+	color: var(--color-ready);
+}
+
+.tree-tile-value {
+	font-size: .7rem;
+	font-weight: 900;
+}
+
+.tree-tile.is-fresh {
+	animation: tree-pop 1.3s ease-in-out infinite;
+}
+
+@keyframes tree-pop {
+	0%,
+	100% {
+		box-shadow: inset 0 0 0 2px #0006, 0 0 10px #8cd6b355;
+	}
+
+	50% {
+		box-shadow: inset 0 0 0 2px #0006, 0 0 18px #8cd6b3cc;
+	}
+}
+
+.motion-reduced .tree-tile.is-fresh {
+	animation: none;
+}

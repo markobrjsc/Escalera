@@ -103,6 +103,12 @@
 	align-items: center;
 }
 
+.dev-state-body .voice-status-game {
+	position: static;
+	inset: auto;
+	transform: none;
+}
+
 /* Board pieces need the tilted board context to size correctly. */
 .dev-board {
 	min-height: 240px;

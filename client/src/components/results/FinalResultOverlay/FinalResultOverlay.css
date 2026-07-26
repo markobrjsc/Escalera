@@ -1,1 +1,8 @@
-/* Final-result styles remain in the shared results.css. */
+.final-result {
+	z-index: 80;
+}
+
+.placement-1 {
+	border-width: 3px;
+	background: var(--color-jet);
+}
