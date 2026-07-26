@@ -1,0 +1,9 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.empty-state {
+	display: grid;
+	min-height: 12rem;
+	place-content: center;
+	gap: .5rem;
+	text-align: center;
+}

@@ -1,0 +1,57 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.login-card {
+	display: grid;
+	width: min(90vw, 31rem);
+	max-width: 100%;
+	min-width: 0;
+	max-height: 70dvh;
+	gap: clamp(1rem, 4dvh, 2.25rem);
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding: clamp(1.25rem, 5vmin, 2.5rem);
+}
+
+.login-card form,
+.login-card label,
+.login-card .brand-suits {
+	min-width: 0;
+}
+
+.login-card form {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.registration-card {
+	gap: var(--space-2);
+}
+
+.registration-warning {
+	display: flex;
+	align-items: start;
+	border: 1px solid var(--color-waiting);
+	padding: .55rem;
+	color: var(--color-waiting);
+	font-size: var(--font-xs);
+	line-height: 1.35;
+}
+
+.registration-warning input {
+	width: 1.2rem;
+	min-height: 1.2rem;
+	flex: 0 0 auto;
+	accent-color: var(--color-teal);
+}
+
+.brand-suit {
+	font-size: clamp(1.5rem, 7vmin, 2.5rem);
+	line-height: 1;
+}
+
+.login-note {
+	margin: 0;
+	font-size: var(--font-xs);
+	line-height: 1.45;
+	text-align: center;
+}

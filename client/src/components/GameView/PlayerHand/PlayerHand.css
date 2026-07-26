@@ -1,0 +1,22 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.player-hand {
+	position: absolute;
+	z-index: 12;
+	left: calc(50vw - var(--hand-span) / 2);
+	bottom: calc(-.25 * var(--card-h));
+	width: var(--hand-span);
+	height: var(--card-h);
+	overflow: visible;
+	pointer-events: none;
+}
+
+.hand-cards {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	overflow: visible;
+	pointer-events: auto;
+}

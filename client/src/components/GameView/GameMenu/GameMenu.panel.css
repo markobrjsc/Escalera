@@ -1,0 +1,18 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.game-menu {
+	position: fixed;
+	inset: 0 auto 0 0;
+	z-index: 60;
+	display: grid;
+	width: min(78vw, 22rem);
+	grid-template-rows: auto auto repeat(3, auto) 1fr auto;
+	gap: var(--space-2);
+	overflow: auto;
+	padding: var(--space-3);
+	background: var(--color-onyx);
+}
+
+.leave-game {
+	align-self: end;
+}

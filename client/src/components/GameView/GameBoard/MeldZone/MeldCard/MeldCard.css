@@ -1,0 +1,58 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.meld-card {
+	display: grid;
+	min-width: 0;
+	min-height: 0;
+	align-items: center;
+	border: var(--hair) solid transparent;
+	border-radius: var(--radius-sm);
+	padding: calc(.55 * var(--u));
+	background: transparent;
+	cursor: default;
+}
+
+/* Cards sit flush left with a small gap; when the row runs out of room the gap
+   goes negative on its own and they overlap instead of shrinking. */
+.meld-cards {
+	--face-h: calc(16.5 * var(--u));
+	--face-w: calc(var(--face-h) * 5 / 7);
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+.meld-cards .card-face {
+	width: var(--face-w);
+	height: var(--face-h);
+	flex: 0 0 auto;
+	margin-right: min(calc(.5 * var(--u)), calc((100% - var(--meld-count) * var(--face-w)) / max(1, var(--meld-count) - 1)));
+	border-radius: var(--radius-sm);
+	object-fit: cover;
+	box-shadow: calc(-.15 * var(--u)) 0 calc(.2 * var(--u)) #0007;
+}
+
+.meld-cards .card-face:last-child {
+	margin-right: 0;
+}
+
+/* Only rule-valid targets light up; a bright colour + thick glow makes them
+   unmistakable. Anything else refuses without sending. */
+.is-target {
+	border-color: var(--color-target) !important;
+	box-shadow: 0 0 0 max(2px, calc(.24 * var(--u))) var(--color-target), 0 0 calc(1.8 * var(--u)) var(--color-target) !important;
+	animation: target-pulse 1.4s ease-in-out infinite;
+}
+
+.meld-card.is-target {
+	border-color: var(--color-target) !important;
+}
+
+.is-refused {
+	border-color: var(--color-danger) !important;
+	animation: none;
+}
+
+/* --card-count is set per card in App.tsx, so the overlap that makes the hand
+   span exactly --hand-span has to be solved here, on the card itself. */

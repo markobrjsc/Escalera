@@ -1,0 +1,25 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.lobby-tools {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) var(--control-height) var(--control-height);
+	gap: var(--space-1);
+}
+
+.lobby-tools input {
+	min-width: 0;
+	font-size: var(--font-sm);
+}
+
+.lobby-tools .button-icon {
+	border-color: var(--color-teal);
+	color: var(--color-teal);
+}
+
+.lobby-tools .create-button {
+	border-color: var(--color-teal);
+	padding: 0;
+	background: var(--color-teal);
+	color: var(--color-white);
+	font-size: 1.7rem;
+}

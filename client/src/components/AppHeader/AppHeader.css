@@ -1,0 +1,60 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.app-header {
+	display: grid;
+	height: clamp(3.5rem, 10dvh, 5rem);
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	border-bottom: 1px solid var(--color-muted);
+}
+
+.app-header >:first-child {
+	justify-self: start;
+}
+
+.app-header .brand {
+	align-self: center;
+}
+
+.brand-small {
+	font-size: clamp(1.55rem, 7vw, 2.6rem);
+}
+
+.app-header .brand-suits {
+	gap: var(--space-1);
+}
+
+.app-header .brand-suit {
+	font-size: clamp(1.15rem, 5vmin, 2rem);
+}
+
+.logout-button {
+	position: relative;
+	min-width: var(--control-height);
+	width: var(--control-height);
+	min-height: var(--control-height);
+	padding: 0;
+	color: transparent;
+	font-size: 0;
+	transform: none;
+}
+
+.logout-button::after {
+	color: var(--color-white);
+	content: "←";
+	font-size: 1.5rem;
+	line-height: 1;
+}
+
+.app-header .profile-icon {
+	justify-self: end;
+}
+
+.profile-button {
+	min-width: 0;
+	min-height: 0;
+	justify-self: end;
+	border: 0;
+	padding: 0;
+	border-radius: 50%;
+}

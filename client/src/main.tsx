@@ -1,19 +1,21 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
-import { PileDesignView } from "./PileDesignView.js";
-import { initMotionPreference } from "./fx.js";
+import { DevApp } from "./dev/DevApp.js";
+import { isDevPath } from "./dev/access.js";
+import { initMotionPreference } from "./lib/motion.js";
 import { AudioProvider } from "./audio.js";
 import "./styles.css";
 
 initMotionPreference();
 
-// Design-Labor für die Stapel (#51): über Pfad oder Hash erreichbar, damit es
-// auch hinter Hosts ohne SPA-Fallback funktioniert. Kein Login nötig.
-const designRoute = window.location.pathname.replace(/\/+$/, "") === "/design/piles" || window.location.hash === "#/design/piles";
+// The admin-only component gallery and the legacy pile design lab (#51/#89) live
+// under the dev router (path or hash, so they work behind hosts without an SPA
+// fallback). Everything else is the game itself.
+const dev = isDevPath(window.location.pathname, window.location.hash);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AudioProvider>{designRoute ? <PileDesignView /> : <App />}</AudioProvider>
+    <AudioProvider>{dev ? <DevApp /> : <App />}</AudioProvider>
   </StrictMode>
 );

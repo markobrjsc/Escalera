@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthService } from "../src/auth/auth.service.js";
+import { isAdminUsername } from "../src/auth/auth.types.js";
 
 function setup() {
   const createdUser = { id: "user", username: "NeuerName", avatarKey: null, tutorialCompleted: false };
@@ -28,5 +29,27 @@ describe("bewusste Registrierung", () => {
     expect(result.created).toBe(true);
     expect(result.user.tutorialCompleted).toBe(false);
     expect(prisma.session.create).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Admin-Erkennung", () => {
+  afterEach(() => { delete process.env.ADMIN_USERNAMES; });
+
+  it("erkennt in der Allowlist gelistete Konten unabhängig von Schreibweise und Leerraum", () => {
+    process.env.ADMIN_USERNAMES = "Marko, spielleitung";
+    expect(isAdminUsername("marko")).toBe(true);
+    expect(isAdminUsername("  SPIELLEITUNG ")).toBe(true);
+    expect(isAdminUsername("gast")).toBe(false);
+  });
+
+  it("kennzeichnet den öffentlichen Nutzer als Admin nur bei Allowlist-Treffer", () => {
+    const { service } = setup();
+    process.env.ADMIN_USERNAMES = "marko";
+    expect(service.publicUser({ id: "1", username: "Marko" }).isAdmin).toBe(true);
+    expect(service.publicUser({ id: "2", username: "Gast" }).isAdmin).toBe(false);
+  });
+
+  it("macht ohne Allowlist niemanden zum Admin", () => {
+    expect(isAdminUsername("marko")).toBe(false);
   });
 });

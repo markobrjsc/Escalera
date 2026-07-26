@@ -4,7 +4,7 @@ import { AuthService } from "./auth.service.js";
 import { SESSION_COOKIE } from "./auth.types.js";
 
 export interface AuthenticatedRequest extends Request {
-  user: { id: string; username: string; avatarKey: string | null; tutorialCompleted: boolean };
+  user: { id: string; username: string; avatarKey: string | null; tutorialCompleted: boolean; isAdmin: boolean };
 }
 
 @Injectable()

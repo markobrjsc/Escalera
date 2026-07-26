@@ -1,0 +1,80 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+/* Contextual player controls are shared by lobby seats and game seats. */
+.player-card-backdrop {
+	z-index: 75;
+}
+
+.player-interaction-card {
+	display: grid;
+	width: min(92vw, 26rem);
+	gap: var(--space-2);
+	padding: var(--space-3);
+	box-shadow: 0 1rem 3rem #000b;
+}
+
+.player-card-identity {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.player-card-identity h2,
+.player-card-identity p {
+	margin: 0;
+}
+
+.player-card-identity .profile-icon-large {
+	width: clamp(3.2rem, 14vw, 4.8rem);
+	height: clamp(3.2rem, 14vw, 4.8rem);
+}
+
+.player-profile-action,
+.player-kick-action {
+	width: 100%;
+}
+
+.player-voice-controls {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: .35rem .75rem;
+	border: var(--hair) solid #52796f77;
+	border-radius: var(--radius-sm);
+	padding: var(--space-2);
+	background: #18201eaa;
+}
+
+.player-voice-controls label {
+	display: flex;
+	grid-column: 1 / -1;
+	justify-content: space-between;
+	gap: 1rem;
+	color: var(--color-white);
+	font-size: var(--t-xs);
+	font-weight: 800;
+}
+
+.player-voice-controls output {
+	color: var(--color-ready);
+	font-variant-numeric: tabular-nums;
+}
+
+.player-voice-controls input[type="range"] {
+	width: 100%;
+	min-width: 0;
+	min-height: 1.6rem;
+	border: 0;
+	padding: 0;
+	accent-color: var(--color-teal);
+	cursor: pointer;
+}
+
+.player-voice-controls .audio-mute {
+	min-width: 8.5rem;
+}
+
+.player-voice-controls.is-muted input[type="range"] {
+	opacity: .45;
+}

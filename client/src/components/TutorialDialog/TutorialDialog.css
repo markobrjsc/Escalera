@@ -1,0 +1,52 @@
+/* Aufgeteilt aus styles/views.css (#89): Regeln bleiben in Originalreihenfolge, damit die Kaskade und das Rendering identisch bleiben. */
+
+.tutorial-dialog {
+	display: grid;
+	width: min(90vw, 34rem);
+	justify-items: center;
+	gap: var(--space-3);
+	text-align: center;
+}
+
+.tutorial-dialog h2,
+.tutorial-dialog p {
+	margin: 0;
+}
+
+.tutorial-dialog > p:not(.overline) {
+	min-height: 4.5rem;
+	color: var(--color-muted);
+	line-height: 1.55;
+}
+
+.tutorial-suits {
+	font-size: clamp(2rem, 9vmin, 4rem);
+	font-weight: 900;
+	letter-spacing: .15em;
+}
+
+.tutorial-suits span {
+	color: var(--color-danger);
+}
+
+.tutorial-progress {
+	display: flex;
+	gap: .45rem;
+}
+
+.tutorial-progress span {
+	width: 1.7rem;
+	height: .3rem;
+	border: 1px solid var(--color-teal);
+}
+
+.tutorial-progress .is-current {
+	background: var(--color-teal);
+}
+
+.tutorial-actions {
+	display: flex;
+	width: 100%;
+	justify-content: center;
+	gap: var(--space-1);
+}
