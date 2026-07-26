@@ -65,6 +65,9 @@ import { PlayerInteractionCard } from "../components/PlayerInteractionCard/Playe
 import { PlayerVoiceControls } from "../components/PlayerInteractionCard/PlayerVoiceControls/PlayerVoiceControls.js";
 import { TutorialDialog } from "../components/TutorialDialog/TutorialDialog.js";
 import { TutorialProgress } from "../components/TutorialDialog/TutorialProgress/TutorialProgress.js";
+import { TutorialChapterBody } from "../components/TutorialDialog/TutorialChapterBody/TutorialChapterBody.js";
+import { TutorialFeed } from "../components/TutorialDialog/TutorialFeed/TutorialFeed.js";
+import { TUTORIAL_CHAPTERS } from "../components/TutorialDialog/tutorial-content.js";
 import { PanZoom } from "../components/PanZoom/PanZoom.js";
 import { PileDesignView } from "../components/PileDesignView/PileDesignView.js";
 import { demoCards, demoMeld, demoPlacements, demoProfile, demoRoundResult, demoTree, makeGame, makeLobby, makeUser, makeVoice } from "./fixtures.js";
@@ -212,6 +215,8 @@ export const previews: Preview[] = [
 
   // ---- Tutorial ----
   { id: "TutorialProgress", title: "TutorialProgress", group: "Tutorial", render: () => <div className="tutorial-dialog"><TutorialProgress count={4} step={1} /></div> },
+  { id: "TutorialChapterBody", title: "TutorialChapterBody", group: "Tutorial", render: () => <div className="tutorial-dialog"><div className="tutorial-content"><TutorialChapterBody chapter={TUTORIAL_CHAPTERS[0]} read /></div></div> },
+  { id: "TutorialFeed", title: "TutorialFeed", group: "Tutorial", render: () => <div className="tutorial-dialog"><TutorialFeed readMask={5} onReach={noop} /></div> },
   { id: "TutorialDialog", title: "TutorialDialog", group: "Tutorial", full: true, render: () => <TutorialDialog user={user} onUser={noop} onClose={noop} /> },
 
   // ---- Sonstige ----

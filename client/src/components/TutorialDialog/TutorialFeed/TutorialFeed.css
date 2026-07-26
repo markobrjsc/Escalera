@@ -1,0 +1,38 @@
+/* Ein durchgehender Lesefluss statt geblätterter Seiten: nur der Feed scrollt,
+   der Dialograhmen bleibt stehen. */
+
+.tutorial-feed {
+	display: grid;
+	min-height: 0;
+	align-content: start;
+	gap: .85rem;
+	overflow: hidden auto;
+	overscroll-behavior: contain;
+	scrollbar-width: none;
+}
+
+.tutorial-feed::-webkit-scrollbar {
+	display: none;
+}
+
+.tutorial-feed:focus-visible {
+	outline: 2px solid var(--color-select);
+	outline-offset: 2px;
+}
+
+.tutorial-feed-chapter {
+	padding: .85rem;
+	border: 1px solid color-mix(in srgb, var(--color-teal) 48%, transparent);
+	background: color-mix(in srgb, var(--color-onyx) 88%, transparent);
+}
+
+/* Innerhalb des Feeds trägt jedes Kapitel seinen Rahmen selbst, deshalb fallen
+   die Außenabstände der Bausteine etwas kompakter aus. */
+.tutorial-feed .tutorial-details {
+	margin: .6rem 0;
+}
+
+.tutorial-feed .tutorial-tip,
+.tutorial-feed .tutorial-phase-table {
+	margin-top: .6rem;
+}

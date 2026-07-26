@@ -611,7 +611,15 @@ button:disabled,
 }
 
 /* Event-delegated pointer tilt. The hook only activates this class on fine
-   pointers; nested controls remain ordinary DOM and retain their hit targets. */
+   pointers; nested controls remain ordinary DOM and retain their hit targets.
+
+   `.result-panel` is deliberately NOT in this list: it scrolls and contains the
+   score history table whose first and last column are `position: sticky`. Sticky
+   offsets are resolved against the nearest scroll container, and rotating an
+   ancestor inside a `perspective` moves that container's projection — the sticky
+   columns then land over the middle rounds and the panel's own sections appear to
+   overlap. The static depth (border, gradient, shadow) stays; only the runtime
+   tilt is dropped. */
 
 :is(
 	.login-card,
@@ -622,7 +630,6 @@ button:disabled,
 	.dialog,
 	.game-menu,
 	.player-interaction-card,
-	.result-panel,
 	.turn-order-player,
 	.active-player-hud,
 	.meld-card,
@@ -648,7 +655,6 @@ button:disabled,
 	.dialog,
 	.game-menu,
 	.player-interaction-card,
-	.result-panel,
 	.pile-design-panel,
 	.dev-canvas
 ).is-depth-active {

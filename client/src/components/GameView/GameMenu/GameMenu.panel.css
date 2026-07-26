@@ -23,13 +23,16 @@
 	align-items: flex-start;
 }
 
+/* Bewusst wieder kleiner als in #85: die Überschrift bleibt auf jeder Breite
+   einzeilig und überlässt die Höhe den Menüeinträgen. */
 .game-menu-title {
 	margin: 0;
 	min-width: 0;
-	font-size: clamp(2.75rem, 6vw, 5rem);
-	line-height: .9;
-	overflow-wrap: anywhere;
-	text-wrap: balance;
+	overflow: hidden;
+	font-size: clamp(1.3rem, 3.2vw, 2rem);
+	line-height: 1.1;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .game-menu > button,
@@ -44,4 +47,18 @@
 
 .leave-game {
 	align-self: end;
+}
+
+/* 30 vw sind auf dem Telefon rund 110 px — dort passt nicht einmal das Wort
+   „Menü" hinein. Auf schmalen Viewports zählt daher der absolute Wert, damit
+   Überschrift und Einträge lesbar bleiben. */
+@media (max-width: 760px) {
+	.game-menu {
+		width: min(86vw, 20rem);
+	}
+
+	.game-menu > button,
+	.game-menu .sort-control button {
+		font-size: clamp(.78rem, 3.2vw, .95rem);
+	}
 }

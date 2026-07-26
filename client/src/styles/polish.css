@@ -105,6 +105,14 @@
 	padding: clamp(.65rem, 2.2vmin, 1rem);
 }
 
+/* Muss hinter der Regel darüber stehen, sonst gewinnt sie wieder: 30 vw ergeben
+   auf dem Telefon rund 110 px, in die nicht einmal die Überschrift passt. */
+@media (max-width: 760px) {
+	.game-menu {
+		width: min(86vw, 20rem);
+	}
+}
+
 .game-menu > button:not(.leave-game),.game-menu .sort-control button {
 	min-height: max(2.35rem, calc(.82 * var(--control-height)));
 }
