@@ -5,8 +5,8 @@ import { GameMenu } from "./GameMenu.js";
 
 const noop = () => undefined;
 
-describe("Spielmenü-Überschrift", () => {
-  it("skaliert ausschließlich das Menülabel über eine eigene Klasse", () => {
+describe("Menü-Überschrift", () => {
+  it("trägt das kurze Label über eine eigene Klasse", () => {
     const html = renderToStaticMarkup(
       <GameMenu
         sort="rank"
@@ -19,8 +19,18 @@ describe("Spielmenü-Überschrift", () => {
       />
     );
 
-    expect(html).toContain('<h2 class="game-menu-title">Spielmenü</h2>');
+    expect(html).toContain('<h2 class="game-menu-title">Menü</h2>');
     expect(html).not.toContain('<button class="game-menu-title"');
+  });
+
+  it("hält die Überschrift einzeilig und kleiner als die zurückgenommene Fassung aus #85", () => {
+    const panel = readFileSync(new URL("./GameMenu.panel.css", import.meta.url), "utf8");
+    const title = panel.slice(panel.indexOf(".game-menu-title"));
+
+    expect(title).toContain("white-space: nowrap");
+    expect(title).toContain("text-overflow: ellipsis");
+    expect(title).not.toContain("overflow-wrap: anywhere");
+    expect(title).toMatch(/font-size:\s*clamp\(1\.3rem,/);
   });
 
   it("begrenzt das Panel in Basis- und Landscape-Regeln auf 30 vw bei voller Höhe", () => {
