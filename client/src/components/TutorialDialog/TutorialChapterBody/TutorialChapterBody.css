@@ -1,0 +1,10 @@
+/* Kapitelüberschrift — nur im Feed sichtbar, wo alle Kapitel untereinander
+   stehen und daher jedes seinen eigenen Titel braucht. */
+
+.tutorial-chapter-heading {
+	margin: 0 0 .35rem;
+	color: var(--color-white);
+	font-family: var(--font-display);
+	font-size: clamp(1.05rem, 4.2vw, 1.35rem);
+	line-height: 1.1;
+}

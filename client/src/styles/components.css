@@ -62,6 +62,8 @@
 @import "../components/SlideStage/SlideStage.css";
 @import "../components/TutorialDialog/TutorialDialog.css";
 @import "../components/TutorialDialog/TutorialProgress/TutorialProgress.css";
+@import "../components/TutorialDialog/TutorialChapterBody/TutorialChapterBody.css";
+@import "../components/TutorialDialog/TutorialFeed/TutorialFeed.css";
 @import "../components/results/results.css";
 @import "../components/results/Scoreboard/Scoreboard.css";
 @import "../components/results/Scoreboard/ScoreHistory/ScoreHistory.css";

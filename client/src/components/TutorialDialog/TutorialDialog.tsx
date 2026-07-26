@@ -5,6 +5,9 @@ import type { User } from "../../lib/types.js";
 import { reducedMotionActive } from "../../lib/motion.js";
 import { useAudio } from "../../audio.js";
 import { TutorialProgress } from "./TutorialProgress/TutorialProgress.js";
+import { TutorialChapterBody } from "./TutorialChapterBody/TutorialChapterBody.js";
+import { TutorialFeed } from "./TutorialFeed/TutorialFeed.js";
+import { useCompactTutorial } from "./useCompactTutorial.js";
 import { tutorialKeyAction } from "./tutorial-keyboard.js";
 import {
   ALL_TUTORIAL_CHAPTERS_MASK,
@@ -24,6 +27,7 @@ const focusableSelector = "button:not([disabled]), input:not([disabled]), select
 
 export function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: (user: User) => void; onClose: () => void }) {
   const { play: playAudio } = useAudio();
+  const compact = useCompactTutorial();
   const [step, setStep] = useState(() => clampTutorialStep(user.tutorialStep));
   const [readMask, setReadMask] = useState(user.tutorialReadMask ?? 0);
   const [mode, setMode] = useState<TutorialMode>(() => user.tutorialCompleted ? "reference" : "guided");
@@ -117,7 +121,9 @@ export function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: 
   }, []);
 
   useEffect(() => {
-    const target = current.target
+    // Der Feed zeigt alle Kapitel gleichzeitig; ein Spotlight auf ein einzelnes
+    // Bedienelement hätte dort keinen eindeutigen Bezug mehr.
+    const target = current.target && !compact
       ? document.querySelector<HTMLElement>(`[data-tutorial-target="${current.target}"]`)
       : null;
     openedTarget.current?.removeAttribute("data-tutorial-highlighted");
@@ -142,7 +148,7 @@ export function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: 
       window.removeEventListener("scroll", measure, true);
       observer?.disconnect();
     };
-  }, [current.target]);
+  }, [current.target, compact]);
 
   const reset = async () => {
     setBusy(true);
@@ -246,20 +252,22 @@ export function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: 
       <header className="tutorial-header">
         <div>
           <p className="overline">Anleitung & Regelreferenz</p>
-          <h2 id="tutorial-title" ref={headingRef} tabIndex={-1}>{current.title}</h2>
+          <h2 id="tutorial-title" ref={headingRef} tabIndex={-1}>{compact ? "Anleitung & Regeln" : current.title}</h2>
         </div>
         <div className="tutorial-header-actions">
-          <div className="tutorial-mode-switch" role="group" aria-label="Tutorial-Modus">
+          {!compact && <div className="tutorial-mode-switch" role="group" aria-label="Tutorial-Modus">
             <button type="button" aria-pressed={mode === "guided"} onClick={() => switchMode("guided")}>Geführt</button>
             <button type="button" aria-pressed={mode === "reference"} onClick={() => switchMode("reference")}>Referenz</button>
-          </div>
+          </div>}
           <button className="button-icon tutorial-close" disabled={busy} onClick={() => void pause()} aria-label="Tutorial pausieren und schließen">×</button>
         </div>
       </header>
 
       <TutorialProgress count={TUTORIAL_CHAPTERS.length} step={step} readMask={readMask} />
 
-      <div className={`tutorial-layout is-${mode}`}>
+      {compact
+        ? <TutorialFeed readMask={readMask} onReach={(index) => persistVisit(index)} />
+        : <div className={`tutorial-layout is-${mode}`}>
         {mode === "reference" && <aside className="tutorial-index" aria-label="Tutorial-Kapitel">
           <label className="tutorial-search">
             <span className="sr-only">Kapitel durchsuchen</span>
@@ -291,28 +299,15 @@ export function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: 
         </aside>}
 
         <article className="tutorial-content" ref={contentRef}>
-          <div className="tutorial-chapter-meta">
-            <span>{current.category}</span>
-            <span className={isChapterRead(readMask, step) ? "is-read" : ""}>
-              {isChapterRead(readMask, step) ? "✓ Gelesen" : "Noch ungelesen"}
-            </span>
-            {current.targetLabel && <span>Im UI: {current.targetLabel}</span>}
-          </div>
-          <p id="tutorial-summary" className="tutorial-summary">{current.summary}</p>
-          <ul className="tutorial-details">{current.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
-          {current.phases && <div className="tutorial-phase-table" role="region" aria-label="Anforderungen aller sieben Phasen" tabIndex={0}>
-            <table>
-              <thead><tr><th scope="col">Phase</th><th scope="col">Anforderung</th></tr></thead>
-              <tbody>{current.phases.map((phase) => <tr key={phase.phase}><th scope="row">{phase.phase}</th><td>{phase.requirement}</td></tr>)}</tbody>
-            </table>
-          </div>}
-          {current.tip && <aside className="tutorial-tip"><strong>Tipp</strong><span>{current.tip}</span></aside>}
+          <TutorialChapterBody chapter={current} read={isChapterRead(readMask, step)} summaryId="tutorial-summary" />
         </article>
-      </div>
+      </div>}
 
       {error && <p className="error tutorial-error" role="alert">{error}</p>}
       <p className="sr-only" id="tutorial-shortcuts">Pfeiltasten wechseln Kapitel, Schrägstrich öffnet die Suche und Escape pausiert das Tutorial.</p>
-      <footer className="tutorial-footer">
+      {/* Im Feed ersetzt das Scrollen die Navigation: Zurück, Weiter, Pausieren
+          und Zurücksetzen entfallen, geschlossen wird über das × in der Kopfzeile. */}
+      {!compact && <footer className="tutorial-footer">
         <div className="tutorial-secondary-actions">
           <button className="button-quiet" disabled={busy} onClick={() => void reset()}>Fortschritt zurücksetzen</button>
           <button className="button-quiet" disabled={busy} onClick={() => void pause()}>Pausieren</button>
@@ -328,7 +323,7 @@ export function TutorialDialog({ user, onUser, onClose }: { user: User; onUser: 
                 {remaining === 0 ? "Tutorial abschließen" : `${remaining} Kapitel offen`}
               </button>}
         </div>
-      </footer>
+      </footer>}
     </section>
   </div>;
 }

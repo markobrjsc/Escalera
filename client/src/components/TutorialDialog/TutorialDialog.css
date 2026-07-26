@@ -352,95 +352,41 @@
 	}
 }
 
+/* Kompaktlayout: der Dialog nutzt die volle Fläche statt als schwebendes Panel
+   im Backdrop zu sitzen, und der Inhalt wird ein einziger Lesefluss. Kapitelindex,
+   Modusumschalter und Blätternavigation entfallen hier komplett — die Grenze ist
+   dieselbe wie in useCompactTutorial, das den Feed einschaltet. */
 @media (max-width: 760px) {
+	.tutorial-backdrop {
+		padding: 0;
+	}
+
 	.tutorial-dialog {
-		width: min(97vw, 42rem);
-		height: min(97dvh, 55rem);
-		padding: .8rem;
-		gap: .65rem;
+		width: 100vw;
+		height: 100dvh;
+		max-height: none;
+		grid-template-rows: auto auto minmax(0, 1fr);
+		gap: .55rem;
+		border-width: 0;
+		border-radius: 0;
+		padding:
+			max(.6rem, env(safe-area-inset-top))
+			max(.7rem, env(safe-area-inset-right))
+			max(.6rem, env(safe-area-inset-bottom))
+			max(.7rem, env(safe-area-inset-left));
 	}
 
-	.tutorial-layout {
-		grid-template-columns: 1fr;
-		grid-template-rows: auto minmax(0, 1fr);
-		gap: .65rem;
-	}
-
-	.tutorial-layout.is-guided {
-		grid-template-rows: minmax(0, 1fr);
-	}
-
-	.tutorial-index {
-		grid-template-rows: auto auto;
-		padding: .55rem;
-	}
-
-	.tutorial-index nav {
-		overflow: auto hidden;
-		scroll-snap-type: x proximity;
-	}
-
-	.tutorial-index ol {
-		display: flex;
-		width: max-content;
+	.tutorial-header h2 {
 		max-width: none;
-	}
-
-	.tutorial-index li {
-		width: 12.5rem;
-		scroll-snap-align: start;
-	}
-
-	.tutorial-index button {
-		height: 3.15rem;
-	}
-
-	.tutorial-content {
-		padding: .9rem;
-	}
-
-	.tutorial-footer {
-		align-items: flex-end;
-	}
-
-	.tutorial-secondary-actions {
-		display: grid;
-	}
-
-	.tutorial-secondary-actions button {
-		padding-inline: .55rem;
-		font-size: .72rem;
+		font-size: clamp(1.1rem, 4.6vw, 1.45rem);
+		line-height: 1.1;
 	}
 }
 
 @media (max-width: 460px) {
-	.tutorial-header {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.tutorial-header-actions {
-		justify-content: space-between;
-	}
-
 	.tutorial-header .overline,
-	.tutorial-chapter-meta span:last-child,
-	.tutorial-save-state {
+	.tutorial-chapter-meta span:last-child {
 		display: none;
-	}
-
-	.tutorial-header-actions {
-		gap: .2rem;
-	}
-
-	.tutorial-mode-switch button {
-		min-height: 2.1rem;
-		padding-inline: .42rem;
-		font-size: .7rem;
-	}
-
-	.tutorial-actions button {
-		padding-inline: .75rem;
 	}
 }
 
