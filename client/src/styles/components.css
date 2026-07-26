@@ -43,6 +43,7 @@
 @import "../components/GameView/BuyButton/BuyButton.css";
 @import "../components/GameView/GameBoard/MeldZone/MeldZone.css";
 @import "../components/GameView/GameBoard/MeldZone/MeldCard/MeldCard.css";
+@import "../components/GameView/GameBoard/MeldZone/MeldSlotEmpty/MeldSlotEmpty.css";
 @import "../components/GameView/PlayerHand/PlayerHand.css";
 @import "../components/GameView/PlayerHand/PlayingCard/PlayingCard.css";
 @import "../components/CardFace/CardFace.css";

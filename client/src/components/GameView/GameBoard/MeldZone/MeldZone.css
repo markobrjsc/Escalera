@@ -22,33 +22,5 @@
 	display: none;
 }
 
-.meld-zone:has(> .empty-meld) {
-	grid-auto-rows: minmax(0, 2fr);
-}
-
-.empty-meld {
-	display: grid;
-	grid-column: 1 / -1;
-	place-content: center;
-	justify-items: center;
-	gap: calc(.2 * var(--u));
-	color: var(--color-muted);
-	text-align: center;
-	text-transform: uppercase;
-}
-
-.empty-meld-icon {
-	color: var(--color-teal);
-	font-size: calc(6 * var(--fu));
-}
-
-.empty-meld strong {
-	color: var(--color-white);
-	font-family: var(--font-display);
-	font-size: var(--t-md);
-	letter-spacing: .04em;
-}
-
-.empty-meld > span:last-child {
-	font-size: var(--t-xs);
-}
+/* Die freien Ablageplätze (MeldSlotEmpty) ersetzen den früheren Leerhinweis:
+   sie zeigen dauerhaft an, wo eine neue Kombination hingehört. */

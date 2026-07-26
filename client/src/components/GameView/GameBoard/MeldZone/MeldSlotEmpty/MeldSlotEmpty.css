@@ -1,0 +1,50 @@
+/* Freier Ablageplatz: erbt Rasterzelle und Tiefenverhalten von .meld-card,
+   bleibt aber bewusst leichter als eine belegte Kombination. */
+
+.meld-slot-empty {
+	display: grid;
+	place-content: center;
+	justify-items: center;
+	gap: calc(.25 * var(--u));
+	border-style: dashed;
+	border-color: #52796f66;
+	background-image: none;
+	box-shadow: none;
+	color: var(--color-muted);
+	text-align: center;
+	text-transform: uppercase;
+	pointer-events: none;
+}
+
+.meld-slot-icon {
+	display: grid;
+	width: calc(3.2 * var(--u));
+	aspect-ratio: 1;
+	place-items: center;
+	border: var(--hair) dashed currentColor;
+	border-radius: 50%;
+	color: var(--color-teal);
+	font-size: calc(2.4 * var(--fu));
+	line-height: 1;
+}
+
+.meld-slot-label {
+	font-size: var(--t-xs);
+	letter-spacing: .04em;
+}
+
+/* Sobald die Auswahl wirklich auslegbar ist, werden die freien Plätze zur
+   sichtbaren Zielfläche — genau die Fläche, die sonst gefehlt hat. */
+.meld-zone.is-target .meld-slot-empty {
+	border-color: var(--color-target);
+	box-shadow: 0 0 0 max(1px, calc(.12 * var(--u))) var(--color-target), 0 0 calc(1.2 * var(--u)) #52796f55;
+	color: var(--color-white);
+}
+
+.meld-zone.is-target .meld-slot-icon {
+	color: var(--color-target);
+}
+
+.meld-zone.is-refused .meld-slot-empty {
+	border-color: var(--color-danger);
+}
