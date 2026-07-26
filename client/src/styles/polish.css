@@ -126,7 +126,7 @@
 }
 
 .game-menu {
-	width: min(78vw, 19rem);
+	width: min(30vw, 19rem);
 	gap: .55rem;
 	padding: clamp(.65rem, 2.2vmin, 1rem);
 }
