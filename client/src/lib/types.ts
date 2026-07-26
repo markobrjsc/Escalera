@@ -17,7 +17,7 @@ export type Lobby = {
 };
 export type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: Card[]; sameSuit: boolean };
 export type RoundResult = { round: number; phase: number; endedById: string; scores: Array<{ userId: string; penalty: number; totalPenalty: number }> };
-export type FinalPlacement = { userId: string; rank: number; totalPenalty: number };
+export type FinalPlacement = { userId: string; rank: number; totalPenalty: number; compensatedPenalty: number };
 export type RecentGameAction = { commandId: string; userId: string; type: string; version: number; createdAt: string; metadata?: { source?: "draw" | "discard"; includesDraw?: boolean; includesDiscard?: boolean } };
 export type AchievementNode = { id: string; label: string; threshold: number; unlocked: boolean; unlockedAt: string | null };
 export type AchievementBranch = { key: string; title: string; kind: "phase" | "gte"; value: number; nodes: AchievementNode[] };

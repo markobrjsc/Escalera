@@ -144,25 +144,36 @@ describe("autoritärer Spielzug", () => {
     expect(result.activePlayerId).toBe("p3");
   });
 
-  it("beendet Phase 7 nach der Wertung mit geteilten Platzierungen", () => {
+  it("kompensiert nach Phase 7 je Restmünze bis zu 30 Strafpunkte ohne negative Werte", () => {
     const state = baseState();
     state.phase = 7;
     state.round = 7;
     state.turn.hasDrawn = true;
     state.players[0].hand = [card("last", "7")];
-    state.players[0].totalPenalty = 5;
+    state.players[0].totalPenalty = 65;
+    state.players[0].coins = 1;
     state.players[1].hand = [card("p2-eight", "8")];
+    state.players[1].totalPenalty = 40;
+    state.players[1].coins = 7;
     state.players[2].hand = [card("p3-eight", "8")];
+    state.players[2].totalPenalty = 20;
+    state.players[2].coins = 0;
 
     const result = discardCard(state, "p1", "last", () => 0);
 
     expect(result.status).toBe("FINISHED");
     expect(result.phase).toBe(7);
-    expect(result.placements).toEqual([
-      { userId: "p1", rank: 1, totalPenalty: 5 },
-      { userId: "p2", rank: 2, totalPenalty: 10 },
-      { userId: "p3", rank: 2, totalPenalty: 10 }
+    expect(result.roundResults[0].scores).toEqual([
+      { userId: "p1", penalty: 0, totalPenalty: 65 },
+      { userId: "p2", penalty: 10, totalPenalty: 50 },
+      { userId: "p3", penalty: 10, totalPenalty: 30 }
     ]);
+    expect(result.placements).toEqual([
+      { userId: "p2", rank: 1, totalPenalty: 0, compensatedPenalty: 50 },
+      { userId: "p3", rank: 2, totalPenalty: 30, compensatedPenalty: 0 },
+      { userId: "p1", rank: 3, totalPenalty: 35, compensatedPenalty: 30 }
+    ]);
+    expect(result.players.every((player) => player.totalPenalty >= 0)).toBe(true);
     expect(() => drawCard(result, "p1", "draw")).toThrow("Partie ist bereits beendet");
     expect(() => buyDiscard(result, "p2")).toThrow("Partie ist bereits beendet");
   });

@@ -119,7 +119,7 @@ model UserStatistic {
   timeouts        Int      @default(0)
   reconnects      Int      @default(0)
   movesPlayed     Int      @default(0)
-  coinPenalty     Int      @default(0)
+  compensatedPenalty Int      @default(0) @map("coinPenalty")
   longestStreet   Int      @default(0)
   phaseWinsMask   Int      @default(0)
   updatedAt       DateTime @updatedAt

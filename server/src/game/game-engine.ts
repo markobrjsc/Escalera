@@ -1,6 +1,7 @@
 import { handPoints, validateGroup, validatePhase, validateStreet, type Phase } from "@escalera/game-rules";
 import { randomUUID } from "node:crypto";
 import { buildDeck, type GameCard, type GameMeld, type GameState, nextTurnDeadline, normalizeGameState, shuffle } from "./game-state.js";
+import { calculateFinalPenalty } from "./penalty-compensation.js";
 
 export class GameActionError extends Error {}
 
@@ -199,11 +200,17 @@ function completeRound(state: GameState, endedById: string, random: (upperExclus
   state.roundResults.push({ round: state.round, phase: state.phase, endedById, scores });
   state.discardOffer = null;
   if (state.phase >= 7) {
+    const compensatedByPlayer = new Map<string, number>();
+    for (const entry of state.players) {
+      const finalPenalty = calculateFinalPenalty(entry.totalPenalty, entry.coins);
+      entry.totalPenalty = finalPenalty.totalPenalty;
+      compensatedByPlayer.set(entry.userId, finalPenalty.compensatedPenalty);
+    }
     const totals = [...new Set(state.players.map((entry) => entry.totalPenalty))].sort((a, b) => a - b);
     state.status = "FINISHED";
     state.roundEndedById = endedById;
     state.placements = state.players
-      .map((entry) => ({ userId: entry.userId, rank: totals.indexOf(entry.totalPenalty) + 1, totalPenalty: entry.totalPenalty }))
+      .map((entry) => ({ userId: entry.userId, rank: totals.indexOf(entry.totalPenalty) + 1, totalPenalty: entry.totalPenalty, compensatedPenalty: compensatedByPlayer.get(entry.userId) ?? 0 }))
       .sort((a, b) => a.rank - b.rank || a.userId.localeCompare(b.userId));
     return state;
   }

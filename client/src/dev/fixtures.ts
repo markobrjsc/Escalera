@@ -66,9 +66,9 @@ export const demoRoundResult: RoundResult = {
 };
 
 export const demoPlacements: FinalPlacement[] = [
-  { userId: "u-host", rank: 1, totalPenalty: 20 },
-  { userId: "u-2", rank: 2, totalPenalty: 60 },
-  { userId: "u-3", rank: 3, totalPenalty: 95 }
+  { userId: "u-host", rank: 1, totalPenalty: 20, compensatedPenalty: 90 },
+  { userId: "u-2", rank: 2, totalPenalty: 60, compensatedPenalty: 30 },
+  { userId: "u-3", rank: 3, totalPenalty: 95, compensatedPenalty: 0 }
 ];
 
 // A minimal-but-complete game snapshot for the scoreboard preview.
