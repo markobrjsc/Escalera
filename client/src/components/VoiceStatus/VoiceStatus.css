@@ -64,6 +64,17 @@
 	touch-action: manipulation;
 }
 
+.voice-microphone-icon {
+	width: 1em;
+	height: 1em;
+	flex: 0 0 auto;
+	stroke-width: 1.65;
+}
+
+.voice-microphone-slash {
+	stroke-width: 2;
+}
+
 .voice-self-mute[aria-pressed="true"] {
 	border-color: var(--color-danger);
 	background: #8f3b3233;
@@ -91,29 +102,41 @@
 	top: max(calc(2 * var(--game-u)), env(safe-area-inset-top));
 	left: calc(50% + 29.6 * var(--game-u));
 	width: max-content;
-	max-width: min(22vw, 9.5rem);
+	max-width: min(22vw, 7.75rem);
 	grid-template-columns: minmax(0, 1fr);
 	justify-items: stretch;
-	gap: .08rem;
+	gap: .06rem;
 	transform: none;
 	border-radius: var(--radius-sm);
-	padding: .14rem .2rem .2rem;
-}
-
-.voice-status-game .voice-connection {
-	justify-content: center;
-	padding: .05rem .25rem 0;
-	font-size: max(.62rem, calc(1.1 * (4.1px + .43 * var(--game-u))));
+	padding: .14rem;
 }
 
 .voice-status-game .voice-self-mute {
 	width: 100%;
 	min-height: 44px;
 	justify-content: center;
-	padding: .2rem .5rem;
+	gap: .28rem;
+	padding: .2rem .42rem;
+	font-size: max(.64rem, calc(1.05 * (4.1px + .43 * var(--game-u))));
+}
+
+.voice-status-game .voice-microphone-icon {
+	width: max(.68rem, calc(.75 * (4.1px + .43 * var(--game-u))));
+	height: max(.68rem, calc(.75 * (4.1px + .43 * var(--game-u))));
+}
+
+.voice-status-game:not(.voice-status-connected) .voice-self-mute strong {
+	max-width: 4.5rem;
+	font-size: max(.58rem, calc(.92 * (4.1px + .43 * var(--game-u))));
+	line-height: 1.05;
+	white-space: normal;
+}
+
+.voice-status-game .voice-self-mute:disabled {
+	opacity: .72;
 }
 
 .voice-status-game > small {
-	max-width: 9rem;
+	max-width: 7.4rem;
 	padding: .1rem .2rem;
 }
