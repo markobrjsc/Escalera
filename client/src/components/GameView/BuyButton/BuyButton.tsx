@@ -12,5 +12,5 @@ export function fitBuyButtonToDiscard(discard: { left: number; top: number; widt
 // The floating "buy the discard" button, positioned above the discard pile.
 export function BuyButton({ visible, position, canBuy, busy, onPointerUp, onClick }: { visible: boolean; position: BuyButtonPosition | null; canBuy: boolean; busy: boolean; onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void; onClick: (event: React.MouseEvent<HTMLButtonElement>) => void }) {
   if (!visible || !position) return null;
-  return <button type="button" className="buy-button is-available" style={{ left: position.left, top: position.top, width: position.width, height: position.height }} disabled={!canBuy || busy} aria-busy={busy} aria-label={busy ? "Kauf läuft" : "Ablage kaufen, kostet eine Münze"} onPointerUp={onPointerUp} onClick={onClick}>Kaufen</button>;
+  return <button type="button" className="buy-button is-available" data-tutorial-target="buy-discard" style={{ left: position.left, top: position.top, width: position.width, height: position.height }} disabled={!canBuy || busy} aria-busy={busy} aria-label={busy ? "Kauf läuft" : "Ablage kaufen, kostet eine Münze"} onPointerUp={onPointerUp} onClick={onClick}>Kaufen</button>;
 }

@@ -1,8 +1,8 @@
 import { Avatar } from "../../../../Avatar/Avatar.js";
 import { PlayerStatLabels } from "../../../../PlayerStatLabels/PlayerStatLabels.js";
-import type { AnchorRef, User } from "../../../../../lib/types.js";
+import type { AnchorRef, PublicUser } from "../../../../../lib/types.js";
 
-type Seat = { userId: string; user: User; connected: boolean; coins: number };
+type Seat = { userId: string; user: PublicUser; connected: boolean; coins: number };
 
 // One opponent seat in the turn-order strip. The seatRef is the flight anchor
 // dealt/discarded cards fly to.

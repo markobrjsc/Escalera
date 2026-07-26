@@ -6,14 +6,23 @@ import type { Rect } from "./motion.js";
 
 export type { LobbyVoice } from "../voiceChat.js";
 
-export type User = { id: string; username: string; avatarKey: string | null; tutorialCompleted: boolean; isAdmin: boolean };
+export type User = {
+  id: string;
+  username: string;
+  avatarKey: string | null;
+  tutorialCompleted: boolean;
+  tutorialStep: number;
+  tutorialReadMask: number;
+  isAdmin: boolean;
+};
+export type PublicUser = Pick<User, "id" | "username" | "avatarKey">;
 export type Lobby = {
   code: string;
   name: string;
   status: "OPEN" | "ACTIVE" | "CLOSED";
-  host: Pick<User, "id" | "username" | "avatarKey">;
+  host: PublicUser;
   settings: { maxPlayers: number; jokersPerPlayer: number; maxTurnSeconds: number | null; streetsRequireSameSuit: boolean; confirmTurnEnd: boolean };
-  players: Array<{ user: User; ready: boolean; connected: boolean }>;
+  players: Array<{ user: PublicUser; ready: boolean; connected: boolean }>;
 };
 export type GameMeld = { id: string; ownerId: string; type: "group" | "street"; cards: Card[]; sameSuit: boolean };
 export type RoundResult = { round: number; phase: number; endedById: string; scores: Array<{ userId: string; penalty: number; totalPenalty: number }> };

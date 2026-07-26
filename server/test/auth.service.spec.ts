@@ -3,7 +3,7 @@ import { AuthService } from "../src/auth/auth.service.js";
 import { isAdminUsername } from "../src/auth/auth.types.js";
 
 function setup() {
-  const createdUser = { id: "user", username: "NeuerName", avatarKey: null, tutorialCompleted: false };
+  const createdUser = { id: "user", username: "NeuerName", avatarKey: null, tutorialCompleted: false, tutorialStep: 0, tutorialReadMask: 0 };
   const prisma = {
     user: { findUnique: vi.fn(async () => null), create: vi.fn(async () => createdUser) },
     session: { create: vi.fn(async () => ({})) }
@@ -28,6 +28,8 @@ describe("bewusste Registrierung", () => {
     });
     expect(result.created).toBe(true);
     expect(result.user.tutorialCompleted).toBe(false);
+    expect(result.user.tutorialStep).toBe(0);
+    expect(result.user.tutorialReadMask).toBe(0);
     expect(prisma.session.create).toHaveBeenCalledOnce();
   });
 });
@@ -47,6 +49,17 @@ describe("Admin-Erkennung", () => {
     process.env.ADMIN_USERNAMES = "marko";
     expect(service.publicUser({ id: "1", username: "Marko" }).isAdmin).toBe(true);
     expect(service.publicUser({ id: "2", username: "Gast" }).isAdmin).toBe(false);
+  });
+
+  it("liefert gespeicherten Tutorial-Fortschritt in eigenen Benutzerantworten", () => {
+    const { service } = setup();
+    expect(service.publicUser({
+      id: "1",
+      username: "Marko",
+      tutorialCompleted: true,
+      tutorialStep: 9,
+      tutorialReadMask: 767
+    })).toMatchObject({ tutorialCompleted: true, tutorialStep: 9, tutorialReadMask: 767 });
   });
 
   it("macht ohne Allowlist niemanden zum Admin", () => {

@@ -73,12 +73,14 @@ export class AuthService {
     return this.publicUser(session.user);
   }
 
-  publicUser(user: { id: string; username: string; avatarKey?: string | null; tutorialCompleted?: boolean }) {
+  publicUser(user: { id: string; username: string; avatarKey?: string | null; tutorialCompleted?: boolean; tutorialStep?: number; tutorialReadMask?: number }) {
     return {
       id: user.id,
       username: user.username,
       avatarKey: user.avatarKey ?? null,
       tutorialCompleted: user.tutorialCompleted ?? false,
+      tutorialStep: user.tutorialStep ?? 0,
+      tutorialReadMask: user.tutorialReadMask ?? 0,
       isAdmin: isAdminUsername(user.username)
     };
   }

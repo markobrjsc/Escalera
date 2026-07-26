@@ -5,7 +5,7 @@ import type { AchievementBranch, FinalPlacement, Game, GameMeld, Lobby, LobbyVoi
 // the server — it only feeds the real components with plausible props/states.
 
 export function makeUser(overrides: Partial<User> = {}): User {
-  return { id: "u-demo", username: "Demospieler", avatarKey: null, tutorialCompleted: true, isAdmin: false, ...overrides };
+  return { id: "u-demo", username: "Demospieler", avatarKey: null, tutorialCompleted: true, tutorialStep: 15, tutorialReadMask: 65_535, isAdmin: false, ...overrides };
 }
 
 export const demoCards: Card[] = [

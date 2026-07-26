@@ -30,6 +30,7 @@ export function VoiceStatus({ voice, variant }: { voice: LobbyVoice; variant: "l
 
   return <aside
     className={`voice-status voice-status-${voice.status} voice-status-${variant} ${voice.selfMuted ? "is-self-muted" : ""}`}
+    data-tutorial-target="voice-controls"
     aria-label="Voice-Chat"
     aria-live={isGame ? "polite" : undefined}
     aria-atomic={isGame ? "true" : undefined}

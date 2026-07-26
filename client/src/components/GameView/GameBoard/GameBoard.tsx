@@ -20,7 +20,7 @@ export function GameBoard({ zoneClass, anchor, runZone, canDraw, canDiscard, can
   openMelds: string[];
   arrivals: Record<string, Arrival>;
 }) {
-  return <section className="game-board">
+  return <section className="game-board" data-tutorial-target="game-board">
     <PileStation
       zone="draw"
       zoneClassName={zoneClass("draw")}
@@ -34,6 +34,7 @@ export function GameBoard({ zoneClass, anchor, runZone, canDraw, canDiscard, can
       kind="draw"
       label="Ziehstapel"
       count={shownDraw}
+      tutorialTarget="draw-discard"
     />
     <MeldZone
       melds={melds}

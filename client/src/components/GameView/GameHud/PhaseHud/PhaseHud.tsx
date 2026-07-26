@@ -50,7 +50,7 @@ export function PhaseHud({ round, phase, phaseLaid, previewStep }: { round: numb
   const step = usePreviewStep(phase, previewStep);
   const preview = phasePreview(phase, step);
   const state = phaseLaid ? "Phase ausgelegt" : "Phase offen";
-  return <section className={`phase-hud ${phaseLaid ? "is-laid" : "is-open"}`} aria-label={`Runde ${round} von 7. ${phaseRequirement(phase)}. ${state}.`}>
+  return <section className={`phase-hud ${phaseLaid ? "is-laid" : "is-open"}`} data-tutorial-target="phase-status" aria-label={`Runde ${round} von 7. ${phaseRequirement(phase)}. ${state}.`}>
     <strong className="phase-hud-round">Runde {round}/7</strong>
     <span className="phase-hud-preview" aria-hidden="true">
       {preview.kind === "groups" && <span className="phase-group-count">{preview.groups}×</span>}

@@ -1,7 +1,7 @@
 import { TurnOrderPlayer } from "./TurnOrderPlayer/TurnOrderPlayer.js";
-import type { Anchor, User } from "../../../../lib/types.js";
+import type { Anchor, PublicUser } from "../../../../lib/types.js";
 
-type Seat = { userId: string; user: User; connected: boolean; coins: number; handCount: number };
+type Seat = { userId: string; user: PublicUser; connected: boolean; coins: number; handCount: number };
 
 // The ordered list of opponents waiting for their turn.
 export function TurnOrder({ players, seatRef, shownCards, onProfile }: { players: Seat[]; seatRef: Anchor; shownCards: (player: { userId: string; handCount: number }) => number; onProfile: (userId: string) => void }) {

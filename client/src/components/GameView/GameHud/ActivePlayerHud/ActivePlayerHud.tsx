@@ -1,9 +1,9 @@
 import { Avatar } from "../../../Avatar/Avatar.js";
 import { PlayerStatLabels } from "../../../PlayerStatLabels/PlayerStatLabels.js";
 import { TurnCountdown } from "../TurnCountdown/TurnCountdown.js";
-import type { AnchorRef, User } from "../../../../lib/types.js";
+import type { AnchorRef, PublicUser } from "../../../../lib/types.js";
 
-type Seat = { userId: string; user: User; coins: number; totalPenalty: number };
+type Seat = { userId: string; user: PublicUser; coins: number; totalPenalty: number };
 
 // The highlighted card for the player whose turn it currently is, with the
 // turn countdown.

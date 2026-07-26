@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { INITIAL_HAND_SIZE } from "@escalera/game-rules";
 import type { Card } from "@escalera/game-rules";
 import { api, ApiError, hasSessionFlag, message } from "../../lib/api.js";
-import type { Anchor, Arrival, Game, Lobby, User } from "../../lib/types.js";
+import type { Anchor, Arrival, Game, Lobby, PublicUser } from "../../lib/types.js";
 import { CARD_BACK, cardAsset, cardSort } from "../../lib/cards.js";
 import { BOARD_TILT, DEAL_TIMING, MATCH_INTRO_MS, fitCardRect, usePrefersReducedMotion } from "../../lib/motion.js";
 import type { FlightSpec, Rect } from "../../lib/motion.js";
@@ -26,7 +26,7 @@ import { GameEvents } from "./GameEvents/GameEvents.js";
 import { GameMenu } from "./GameMenu/GameMenu.js";
 import { actionText, canLayMeld, canLayPhase, DEAL_FLIGHT, DEAL_STEP, meldAccepts, phaseGroups } from "./gameLogic.js";
 
-export function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: User; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void; onTutorial: () => void }) {
+export function GameView({ user, lobby, game, connected, introHold, onGame, onLeave, onProfile, onTutorial }: { user: PublicUser; lobby: Lobby; game: Game; connected: boolean; introHold: boolean; onGame: (game: Game) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void; onTutorial: () => void }) {
   const { play: playAudio, setScene: setAudioScene } = useAudio();
   const [menu, setMenu] = useState(false); const [scoreboard, setScoreboard] = useState(false); const [sort, setSort] = useState<"rank" | "suit">("rank");
   const [selected, setSelected] = useState<string[]>([]); const [pendingAction, setPendingAction] = useState<string | null>(null); const [actionError, setActionError] = useState("");
@@ -126,7 +126,7 @@ export function GameView({ user, lobby, game, connected, introHold, onGame, onLe
   const holdCount = (userId: string, value: number | undefined) => { if (value !== undefined) setCountHold((current) => ({ ...current, [userId]: value })); };
   const releaseCount = (userId: string) => setCountHold((current) => { const { [userId]: _released, ...rest } = current; return rest; });
 
-  const players = useMemo(() => game.state.players.map((player) => { const member = lobby.players.find((entry) => entry.user.id === player.userId); return { ...player, user: member?.user ?? { id: player.userId, username: "Spieler", avatarKey: null, tutorialCompleted: false, isAdmin: false }, connected: member?.connected ?? false }; }), [game.state.players, lobby.players]);
+  const players = useMemo(() => game.state.players.map((player) => { const member = lobby.players.find((entry) => entry.user.id === player.userId); return { ...player, user: member?.user ?? { id: player.userId, username: "Spieler", avatarKey: null }, connected: member?.connected ?? false }; }), [game.state.players, lobby.players]);
   const activePlayer = players.find((player) => player.userId === game.state.activePlayerId) ?? players[0];
   const turnOrder = players.filter((player) => player.userId !== game.state.activePlayerId);
   const hand = useMemo(() => [...game.state.ownHand].sort((a, b) => cardSort(a, b, sort)), [game.state.ownHand, sort]);
@@ -537,7 +537,7 @@ export function GameView({ user, lobby, game, connected, introHold, onGame, onLe
       shownCards={shownCards}
       onProfile={onProfile}
     />
-    <p className="turn-hint" aria-live="polite">{hint}</p>
+    <p className="turn-hint" data-tutorial-target="turn-feedback" aria-live="polite">{hint}</p>
     <BuyButton visible={Boolean(game.state.discardOffer?.available)} position={buyPosition} canBuy={canBuy} busy={pendingAction === "buy"} onPointerUp={buyOnPointerUp} onClick={buyOnClick} />
     <GameBoard
       zoneClass={zoneClass}
@@ -562,7 +562,7 @@ export function GameView({ user, lobby, game, connected, introHold, onGame, onLe
       startDrag={startDrag}
       toggleCard={toggleCard}
     />
-    <nav className="game-nav" aria-label="Spielnavigation"><button className="game-nav-button" disabled={introHold} aria-label="Spielmenü öffnen" onClick={() => setMenu(true)}>☰ <span>Menü</span></button></nav>
+    <nav className="game-nav" data-tutorial-target="game-menu-entry" aria-label="Spielnavigation"><button className="game-nav-button" disabled={introHold} aria-label="Spielmenü öffnen" onClick={() => setMenu(true)}>☰ <span>Menü</span></button></nav>
     <GameStatusBar connected={connected} />
     <GameEvents events={events} />
     {actionError && <div className="game-error" role="alert">{actionError}</div>}

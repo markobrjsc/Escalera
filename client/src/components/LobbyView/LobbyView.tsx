@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, message } from "../../lib/api.js";
-import type { Lobby, LobbyVoice, User } from "../../lib/types.js";
+import type { Lobby, LobbyVoice, PublicUser } from "../../lib/types.js";
 import { useAudio } from "../../audio.js";
 import { Orientation } from "../Orientation/Orientation.js";
 import { AppHeader } from "../AppHeader/AppHeader.js";
@@ -9,7 +9,7 @@ import { SettingBadges } from "./SettingBadges/SettingBadges.js";
 import { MembersPanel } from "./MembersPanel/MembersPanel.js";
 import { LobbySettingsDialog } from "../LobbySettingsDialog/LobbySettingsDialog.js";
 
-export function LobbyView({ user, lobby, connected, voice, error, setError, onLeave, onProfile }: { user: User; lobby: Lobby; connected: boolean; voice: LobbyVoice; error: string; setError: (value: string) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void }) {
+export function LobbyView({ user, lobby, connected, voice, error, setError, onLeave, onProfile }: { user: PublicUser; lobby: Lobby; connected: boolean; voice: LobbyVoice; error: string; setError: (value: string) => void; onLeave: () => Promise<boolean>; onProfile: (userId: string) => void }) {
   const { play: playAudio } = useAudio();
   const [editing, setEditing] = useState(false);
   const self = lobby.players.find((player) => player.user.id === user.id); const isHost = lobby.host.id === user.id;
@@ -32,10 +32,10 @@ export function LobbyView({ user, lobby, connected, voice, error, setError, onLe
     <section className="lobby-layout">
       <h2 className="lobby-name">{lobby.name}</h2>
       <VoiceStatus voice={voice} variant="lobby" />
-      <div className="lobby-settings-row"><SettingBadges settings={lobby.settings} />{isHost && <button className="button-icon lobby-settings-button" aria-label="Lobby-Einstellungen" onClick={() => setEditing(true)}>⚙</button>}</div>
+      <div className="lobby-settings-row" data-tutorial-target="lobby-settings"><SettingBadges settings={lobby.settings} />{isHost && <button className="button-icon lobby-settings-button" aria-label="Lobby-Einstellungen" onClick={() => setEditing(true)}>⚙</button>}</div>
       <MembersPanel players={lobby.players} maxPlayers={lobby.settings.maxPlayers} hostId={lobby.host.id} allReady={allReady} emptySeats={emptySeats} onProfile={onProfile} />
       {error && <p className="error">{error}</p>}
-      <footer className="lobby-actions"><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer>
+      <footer className="lobby-actions" data-tutorial-target="lobby-ready"><button onClick={() => void action(self?.ready ? "not-ready" : "ready")}>{self?.ready ? "Nicht bereit" : "Bereit"}</button></footer>
     </section>
     {editing && <LobbySettingsDialog lobby={lobby} onClose={() => setEditing(false)} setError={setError} />}
   </main>;
